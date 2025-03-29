@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { signOut, onAuthStateChanged } from "firebase/auth";
-import { doc, getDoc, updateDoc, setDoc } from "firebase/firestore";
+import { doc, getDoc, updateDoc, setDoc, deleteDoc } from "firebase/firestore";
 import {
   ref,
   uploadBytes,
@@ -54,10 +54,25 @@ const Profile = () => {
           const userDoc = await getDoc(doc(db, "Users", currentUser.uid));
           if (userDoc.exists()) {
             const data = userDoc.data();
+
+            // Check if profile image is a Firestore ID
+            let profileImageUrl = data.profileImage || "";
+            if (profileImageUrl) {
+              // Fetch the actual image data from MongoDB
+              const imageData = await fetchProfileImage(profileImageUrl);
+              if (imageData) {
+                // Use the base64 data directly
+                profileImageUrl = imageData;
+              }
+            }
+
             setUser({
               uid: currentUser.uid,
               ...data,
+              // Store the actual image data/URL for display
+              displayImage: profileImageUrl,
             });
+
             setUserData({
               firstName: data.firstName || "",
               lastName: data.lastName || "",
@@ -67,8 +82,8 @@ const Profile = () => {
             });
 
             // Set image preview if user has a profile image
-            if (data.profileImage) {
-              setImagePreview(data.profileImage);
+            if (profileImageUrl) {
+              setImagePreview(profileImageUrl);
             }
 
             // Get activity stats from Firestore
@@ -178,21 +193,44 @@ const Profile = () => {
 
     setUploadingImage(true);
     try {
-      // Create a reference to the storage location
-      const imageRef = ref(
-        storage,
-        `profile_images/${user.uid}/${Date.now()}_${imageFile.name}`
+      // Read the file as a base64 string
+      const base64Image = await new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result);
+        reader.readAsDataURL(imageFile);
+      });
+
+      // Instead of FormData, use JSON for the request
+      const imageData = {
+        userId: user.uid,
+        fileName: imageFile.name,
+        contentType: imageFile.type,
+        imageData: base64Image,
+      };
+
+      // Send the image to your server API
+      const response = await fetch(
+        "http://localhost:5000/api/upload-profile-image",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(imageData),
+        }
       );
 
-      // Upload the file
-      await uploadBytes(imageRef, imageFile);
+      if (!response.ok) {
+        throw new Error(`Server responded with status: ${response.status}`);
+      }
 
-      // Get the download URL
-      const downloadURL = await getDownloadURL(imageRef);
+      const result = await response.json();
+      console.log("Image upload successful:", result);
 
-      return downloadURL;
+      // Return the MongoDB image ID from the server response
+      return result.imageId;
     } catch (error) {
-      console.error("Error uploading image:", error);
+      console.error("Error storing image:", error);
       return null;
     } finally {
       setUploadingImage(false);
@@ -203,12 +241,23 @@ const Profile = () => {
     if (!user?.uid || !user?.profileImage) return;
 
     try {
-      // Extract the image path from the URL
-      const imageUrl = user.profileImage;
-      if (imageUrl.includes("firebase")) {
-        const storageRef = ref(storage, imageUrl);
-        await deleteObject(storageRef);
+      // Delete the image from MongoDB via API
+      const response = await fetch(
+        `http://localhost:5000/api/delete-profile-image/${user.profileImage}`,
+        {
+          method: "DELETE",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ userId: user.uid }),
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error(`Server responded with status: ${response.status}`);
       }
+
+      console.log("Previous profile image deleted successfully");
     } catch (error) {
       console.error("Error deleting image:", error);
     }
@@ -218,39 +267,82 @@ const Profile = () => {
     if (!user?.uid) return;
 
     try {
+      console.log("Starting profile update...");
       // Upload new image if selected
-      let profileImageUrl = userData.profileImage;
+      let profileImageId = userData.profileImage;
+      let uploadError = null;
+
       if (imageFile) {
-        const newImageUrl = await uploadImage();
-        if (newImageUrl) {
-          profileImageUrl = newImageUrl;
+        console.log(
+          `Attempting to upload image: ${imageFile.name} (${imageFile.size} bytes)`
+        );
+        try {
+          const newImageId = await uploadImage();
+          if (newImageId) {
+            console.log(`Image upload successful! New ID: ${newImageId}`);
+            // If we uploaded a new image and had an old one, try to delete the old one
+            if (user.profileImage && user.profileImage !== profileImageId) {
+              console.log(`Deleting previous image: ${user.profileImage}`);
+              await deleteExistingImage();
+            }
+            profileImageId = newImageId;
+          } else {
+            // If upload returns null but no error was thrown
+            uploadError = "Failed to store image data - no ID returned";
+            console.error("Image upload failed: No ID returned from server");
+          }
+        } catch (err) {
+          // Specific error for image upload
+          uploadError = err.message || "Error uploading image";
+          console.error("Image upload error details:", err);
         }
       }
 
+      // If there was an upload error but we're not changing the profile image
+      if (uploadError && imageFile) {
+        console.warn(`Upload error occurred: ${uploadError}`);
+        alert(
+          `Image upload failed: ${uploadError}. Your profile info will be updated without the new image.`
+        );
+        // Continue with the update without changing the image
+        profileImageId = user.profileImage;
+      }
+
+      console.log(
+        `Updating user document with profile image ID: ${profileImageId}`
+      );
+      // Update user document in Firestore
       await updateDoc(doc(db, "Users", user.uid), {
         firstName: userData.firstName,
         lastName: userData.lastName,
         bio: userData.bio,
-        profileImage: profileImageUrl,
+        profileImage: profileImageId,
       });
 
+      console.log("Firestore update successful");
+      // Update local state
       setUser({
         ...user,
         firstName: userData.firstName,
         lastName: userData.lastName,
         bio: userData.bio,
-        profileImage: profileImageUrl,
+        profileImage: profileImageId,
       });
 
       setUserData({
         ...userData,
-        profileImage: profileImageUrl,
+        profileImage: profileImageId,
       });
 
+      // Reset edit state
       setEditMode(false);
       setImageFile(null);
+
+      // Show success message
+      alert("Profile updated successfully!");
     } catch (error) {
       console.error("Error updating profile:", error);
+      alert(`Failed to update profile: ${error.message || "Unknown error"}`);
     }
   };
 
@@ -274,6 +366,30 @@ const Profile = () => {
       ...userData,
       profileImage: "",
     });
+  };
+
+  // Update this function to fetch image data from MongoDB
+  const fetchProfileImage = async (imageId) => {
+    if (!imageId) return null;
+
+    try {
+      // Get the image data from your MongoDB server API
+      const response = await fetch(
+        `http://localhost:5000/api/get-profile-image/${imageId}`
+      );
+
+      if (!response.ok) {
+        throw new Error(`Server responded with status: ${response.status}`);
+      }
+
+      const data = await response.json();
+
+      // Return the base64 image data
+      return data.imageData;
+    } catch (error) {
+      console.error("Error fetching image from MongoDB:", error);
+      return null;
+    }
   };
 
   if (loading) {
@@ -366,9 +482,9 @@ const Profile = () => {
                   </div>
                 ) : (
                   <div className="w-32 h-32 rounded-full overflow-hidden border-4 border-gray-600">
-                    {user?.profileImage ? (
+                    {user?.displayImage ? (
                       <img
-                        src={user.profileImage}
+                        src={user.displayImage}
                         alt={`${user.firstName} ${user.lastName}`}
                         className="w-full h-full object-cover"
                       />

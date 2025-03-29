@@ -16,31 +16,76 @@ const Home = () => {
   const navigate = useNavigate();
   const [user, setUser] = useState(null);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [profileImage, setProfileImage] = useState(null);
+
+  // Fetch profile image from MongoDB
+  const fetchProfileImage = async (imageId) => {
+    if (!imageId) return null;
+
+    try {
+      // Get the image data from your MongoDB server API
+      const response = await fetch(
+        `http://localhost:5000/api/get-profile-image/${imageId}`
+      );
+
+      if (!response.ok) {
+        throw new Error(`Server responded with status: ${response.status}`);
+      }
+
+      const data = await response.json();
+
+      // Return the base64 image data
+      return data.imageData;
+    } catch (error) {
+      console.error("Error fetching image from MongoDB:", error);
+      return null;
+    }
+  };
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       if (currentUser) {
-        const userDoc = await getDoc(doc(db, "Users", currentUser.uid));
-        if (userDoc.exists()) {
-          setUser(userDoc.data()); // Update state with user details
-        } else {
-          setUser({
-            firstName: "Guest",
-            lastName: "",
-            email: currentUser.email,
-          });
+        try {
+          const userDoc = await getDoc(doc(db, "Users", currentUser.uid));
+          if (userDoc.exists()) {
+            const userData = userDoc.data();
+
+            // Set user data with UID
+            setUser({
+              uid: currentUser.uid,
+              ...userData,
+            });
+
+            // Check for profile image
+            if (userData.profileImage) {
+              const imageData = await fetchProfileImage(userData.profileImage);
+              if (imageData) {
+                setProfileImage(imageData);
+              }
+            }
+          }
+        } catch (error) {
+          console.error("Error fetching user data:", error);
         }
       } else {
         setUser(null);
+        setProfileImage(null);
       }
     });
 
-    return () => unsubscribe(); // Cleanup listener
+    return () => unsubscribe();
   }, []);
 
   const handleLogout = async () => {
-    await signOut(auth);
-    navigate("/"); // Redirect to landing page
+    try {
+      await signOut(auth);
+      setUser(null);
+      setProfileImage(null);
+      setMenuOpen(false);
+      navigate("/");
+    } catch (error) {
+      console.error("Logout error:", error);
+    }
   };
 
   return (
@@ -63,10 +108,18 @@ const Home = () => {
                 <p className="text-gray-400 text-sm">{user.email}</p>
               </div>
               <div
-                className="w-10 h-10 bg-gray-600 rounded-full flex items-center justify-center cursor-pointer"
+                className="w-10 h-10 bg-gray-600 rounded-full flex items-center justify-center cursor-pointer overflow-hidden"
                 onClick={() => navigate("/profile")}
               >
-                <FaUserTie className="text-white text-xl" />
+                {profileImage ? (
+                  <img
+                    src={profileImage}
+                    alt={`${user.firstName} ${user.lastName}`}
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  <FaUserTie className="text-white text-xl" />
+                )}
               </div>
             </div>
             {menuOpen && (
