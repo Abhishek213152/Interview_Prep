@@ -620,9 +620,17 @@ const Profile = () => {
                 <h3 className="text-xl font-bold text-blue-400 mb-6">
                   Activity Summary
                 </h3>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+                  <div className="bg-gradient-to-br from-green-900 to-green-800 p-4 rounded-lg text-center">
+                    <p className="text-gray-300 mb-2">Coding Assessments</p>
+                    <div className="text-3xl font-bold">
+                      {stats.assessmentsCompleted || 0}
+                    </div>
+                    <p className="text-gray-400 text-sm">Completed</p>
+                  </div>
+
                   <div className="bg-gradient-to-br from-blue-900 to-blue-800 p-4 rounded-lg text-center">
-                    <p className="text-gray-300 mb-2">Coding Assessment</p>
+                    <p className="text-gray-300 mb-2">Coding Assessments</p>
                     <div className="text-3xl font-bold">
                       {stats.codingScore || 0}
                     </div>
