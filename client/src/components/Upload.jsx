@@ -15,7 +15,7 @@ import {
 import { useNavigate } from "react-router-dom";
 import Button from "./Button";
 import { auth, db } from "../firebase";
-import { doc, getDoc } from "firebase/firestore";
+import { doc, getDoc, updateDoc } from "firebase/firestore";
 import { signOut, onAuthStateChanged } from "firebase/auth";
 
 // Define backend URL
@@ -185,6 +185,35 @@ const Upload = () => {
       setAtsScore(responseData.match_score);
       setMissingKeywords(responseData.missing_keywords);
       setImprovement_tips(responseData.improvement_tips);
+
+      // Update the resume analysis count in Firestore
+      if (user && user.uid) {
+        try {
+          // Get current user data
+          const userRef = doc(db, "Users", user.uid);
+          const userDoc = await getDoc(userRef);
+
+          if (userDoc.exists()) {
+            const userData = userDoc.data();
+            // Increment resumeAnalysisCount
+            const currentCount = userData.resumeAnalysisCount || 0;
+
+            await updateDoc(userRef, {
+              resumeAnalysisCount: currentCount + 1,
+            });
+
+            console.log("Resume analysis count updated successfully");
+
+            // Update local user state
+            setUser({
+              ...user,
+              resumeAnalysisCount: currentCount + 1,
+            });
+          }
+        } catch (updateError) {
+          console.error("Error updating resume analysis count:", updateError);
+        }
+      }
     } catch (err) {
       console.error("Error in overall process:", err);
       setError("Error processing resume. Please try again or use mock data.");
