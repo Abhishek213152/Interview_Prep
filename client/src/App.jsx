@@ -11,6 +11,7 @@ import Difficulty from "./components/Difficulty";
 import Ended from "./components/Ended";
 import Result from "./components/Result";
 import Results from "./components/Results";
+import Profile from "./components/Profile";
 
 const App = () => {
   return (
@@ -27,6 +28,7 @@ const App = () => {
         <Route path="/ended" element={<Ended />} />
         <Route path="/result" element={<Result />} />
         <Route path="/results" element={<Results />} />
+        <Route path="/profile" element={<Profile />} />
       </Routes>
     </div>
   );

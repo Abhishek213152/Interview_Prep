@@ -64,13 +64,19 @@ const Home = () => {
               </div>
               <div
                 className="w-10 h-10 bg-gray-600 rounded-full flex items-center justify-center cursor-pointer"
-                onClick={() => setMenuOpen(!menuOpen)}
+                onClick={() => navigate("/profile")}
               >
                 <FaUserTie className="text-white text-xl" />
               </div>
             </div>
             {menuOpen && (
               <div className="absolute right-0 mt-2 w-40 bg-gray-800 text-white rounded-lg shadow-lg">
+                <button
+                  className="block w-full text-left px-4 py-2 hover:bg-gray-700"
+                  onClick={() => navigate("/profile")}
+                >
+                  Profile
+                </button>
                 <button
                   className="block w-full text-left px-4 py-2 hover:bg-gray-700"
                   onClick={handleLogout}
