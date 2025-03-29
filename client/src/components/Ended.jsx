@@ -1,6 +1,11 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { FaCheckCircle, FaArrowLeft, FaUserTie } from "react-icons/fa";
+import {
+  FaCheckCircle,
+  FaArrowLeft,
+  FaUserTie,
+  FaLaptopCode,
+} from "react-icons/fa";
 import { signOut, onAuthStateChanged } from "firebase/auth";
 import { doc, getDoc } from "firebase/firestore";
 import { auth, db } from "../firebase";
@@ -180,7 +185,12 @@ const Ended = () => {
   return (
     <div className="bg-gradient-to-r from-black to-blue-900 text-white min-h-screen">
       <header className="flex justify-between items-center p-6 bg-gray-900 shadow-lg">
-        <h1 className="text-2xl font-bold">AI Interview Results</h1>
+        <div className="flex items-center">
+          <div className="mr-3 bg-blue-600 p-2 rounded-lg">
+            <FaLaptopCode className="text-white text-2xl" />
+          </div>
+          <h1 className="text-2xl font-bold">Interview Results</h1>
+        </div>
 
         {user ? (
           <div className="relative">

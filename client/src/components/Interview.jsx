@@ -7,6 +7,7 @@ import {
   FaFileUpload,
   FaSpinner,
   FaUserTie,
+  FaLaptopCode,
 } from "react-icons/fa";
 import { signOut, onAuthStateChanged } from "firebase/auth";
 import { doc, getDoc } from "firebase/firestore";
@@ -937,7 +938,12 @@ const Interview = () => {
       )}
 
       <header className="flex justify-between items-center p-6 bg-gray-900 shadow-lg">
-        <h1 className="text-2xl font-bold">AI Interview Preparation</h1>
+        <div className="flex items-center">
+          <div className="mr-3 bg-blue-600 p-2 rounded-lg">
+            <FaLaptopCode className="text-white text-2xl" />
+          </div>
+          <h1 className="text-2xl font-bold">AI Interview</h1>
+        </div>
 
         {user ? (
           <div className="relative">

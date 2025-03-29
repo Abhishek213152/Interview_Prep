@@ -10,6 +10,7 @@ import {
   FaChevronRight,
   FaCheckCircle,
   FaTimes,
+  FaLaptopCode,
 } from "react-icons/fa";
 import { useNavigate } from "react-router-dom";
 import Button from "./Button";
@@ -242,7 +243,12 @@ const Upload = () => {
   return (
     <div className="bg-gradient-to-r from-black to-blue-900 text-white min-h-screen">
       <header className="flex justify-between items-center p-6 bg-gray-900 shadow-lg">
-        <h1 className="text-2xl font-bold">AI Placement Prep</h1>
+        <div className="flex items-center">
+          <div className="mr-3 bg-blue-600 p-2 rounded-lg">
+            <FaLaptopCode className="text-white text-2xl" />
+          </div>
+          <h1 className="text-2xl font-bold">Resume Analyzer</h1>
+        </div>
 
         {user ? (
           <div className="relative">

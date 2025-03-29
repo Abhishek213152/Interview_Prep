@@ -6,6 +6,7 @@ import {
   FaTimesCircle,
   FaArrowLeft,
   FaTrophy,
+  FaLaptopCode,
 } from "react-icons/fa";
 import { signOut, onAuthStateChanged } from "firebase/auth";
 import { doc, getDoc } from "firebase/firestore";

@@ -1,5 +1,11 @@
 import React, { useEffect, useState } from "react";
-import { FaRobot, FaUserTie, FaFileAlt, FaSearch } from "react-icons/fa";
+import {
+  FaRobot,
+  FaUserTie,
+  FaFileAlt,
+  FaSearch,
+  FaLaptopCode,
+} from "react-icons/fa";
 import { Link, useNavigate } from "react-router-dom";
 import Button from "./Button";
 import { auth, db } from "../firebase";
@@ -40,7 +46,12 @@ const Home = () => {
   return (
     <div className="bg-gradient-to-r from-black to-blue-900 text-white min-h-screen">
       <header className="flex justify-between items-center p-6 bg-gray-900 shadow-lg">
-        <h1 className="text-2xl font-bold">AI Placement Prep</h1>
+        <div className="flex items-center">
+          <div className="mr-3 bg-blue-600 p-2 rounded-lg">
+            <FaLaptopCode className="text-white text-2xl" />
+          </div>
+          <h1 className="text-2xl font-bold">AI Placement Prep</h1>
+        </div>
 
         {user ? (
           <div className="relative">
@@ -188,22 +199,45 @@ const Home = () => {
         <h2 className="text-3xl font-semibold mb-8">
           Why Use Our AI Placement Platform?
         </h2>
-        <div className="grid md:grid-cols-3 gap-6">
-          <FeatureCard
-            icon={<FaRobot />}
-            title="AI Resume Analysis"
-            desc="Get instant AI feedback on your resume to improve your chances."
-          />
-          <FeatureCard
-            icon={<FaSearch />}
-            title="Skill-Based Practice"
-            desc="Get personalized questions based on your skillset."
-          />
-          <FeatureCard
-            icon={<FaFileAlt />}
-            title="Performance Tracking"
-            desc="Monitor your progress and improve with AI insights."
-          />
+        <div className="max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-3 gap-8">
+          <div className="bg-gray-800 p-8 rounded-lg shadow-lg hover:shadow-xl transition-all border-t-4 border-blue-500">
+            <div className="inline-flex items-center justify-center w-16 h-16 mb-6 bg-blue-500/10 rounded-full">
+              <FaRobot className="text-blue-500 text-2xl" />
+            </div>
+            <h3 className="text-xl font-bold mb-3 text-white">
+              AI Resume Analysis
+            </h3>
+            <p className="text-gray-400">
+              Our AI scans your resume, identifies key strengths and weaknesses,
+              and provides actionable improvements.
+            </p>
+          </div>
+
+          <div className="bg-gray-800 p-8 rounded-lg shadow-lg hover:shadow-xl transition-all border-t-4 border-green-500">
+            <div className="inline-flex items-center justify-center w-16 h-16 mb-6 bg-green-500/10 rounded-full">
+              <FaSearch className="text-green-500 text-2xl" />
+            </div>
+            <h3 className="text-xl font-bold mb-3 text-white">
+              Skill-Based Practice
+            </h3>
+            <p className="text-gray-400">
+              Customize your practice sessions with difficulty levels that match
+              your current experience and learning goals.
+            </p>
+          </div>
+
+          <div className="bg-gray-800 p-8 rounded-lg shadow-lg hover:shadow-xl transition-all border-t-4 border-purple-500">
+            <div className="inline-flex items-center justify-center w-16 h-16 mb-6 bg-purple-500/10 rounded-full">
+              <FaFileAlt className="text-purple-500 text-2xl" />
+            </div>
+            <h3 className="text-xl font-bold mb-3 text-white">
+              Performance Tracking
+            </h3>
+            <p className="text-gray-400">
+              Track your progress over time with detailed analytics and receive
+              personalized improvement recommendations.
+            </p>
+          </div>
         </div>
       </section>
     </div>
