@@ -87,20 +87,20 @@ const Home = () => {
               className="bg-blue-600 hover:bg-blue-700 px-6 py-3"
               // onClick={() => navigate("/coding")}
             >
-              Start Practicing
+              Coding Assessment
             </Button>
           </Link>
           <Button
             className="bg-green-600 hover:bg-green-700 px-6 py-3"
             onClick={() => navigate("/resume")}
           >
-            Upload Resume
+            Scan Resume
           </Button>
           <Button
             className="bg-purple-600 hover:bg-purple-700 px-6 py-3"
             onClick={() => navigate("/interview")}
           >
-            AI Interview
+            AI Voice Interview
           </Button>
         </div>
       </section>

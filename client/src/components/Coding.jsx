@@ -43,6 +43,12 @@ const Coding = () => {
   const [allTestsRun, setAllTestsRun] = useState(false);
   const editorRef = useRef(null);
 
+  // Assessment tracking states
+  const [questionsAttempted, setQuestionsAttempted] = useState(0);
+  const [totalQuestions, setTotalQuestions] = useState(0);
+  const [score, setScore] = useState(0);
+  const [assessmentComplete, setAssessmentComplete] = useState(false);
+
   // Map language names to Monaco editor language identifiers
   const languageMap = {
     java: "java",
@@ -51,24 +57,37 @@ const Coding = () => {
   };
 
   useEffect(() => {
-    // Try to load saved question from localStorage first
-    const savedQuestion = localStorage.getItem("codingQuestion");
-    const savedCode = localStorage.getItem("codingCode");
+    // Try to load assessment progress from localStorage
+    const savedScore = localStorage.getItem("codingAssessmentScore");
+    const savedAttempted = localStorage.getItem("codingQuestionsAttempted");
+    const savedTotal = localStorage.getItem("codingQuestionsTotal");
 
-    if (savedQuestion && savedCode) {
-      try {
-        const parsedQuestion = JSON.parse(savedQuestion);
-        const parsedCode = JSON.parse(savedCode);
+    if (savedScore && savedAttempted && savedTotal) {
+      setScore(parseInt(savedScore));
+      setQuestionsAttempted(parseInt(savedAttempted));
+      setTotalQuestions(parseInt(savedTotal));
 
-        setQuestion(parsedQuestion);
-        setCode(parsedCode);
-        setLoading(false);
-      } catch (error) {
-        console.error("Error parsing saved question:", error);
-        fetchQuestion(); // Fallback to fetching a new question
+      // Check if assessment is complete
+      if (parseInt(savedAttempted) >= parseInt(savedTotal)) {
+        setAssessmentComplete(true);
+      } else {
+        // Continue with assessment
+        fetchQuestion();
       }
     } else {
-      fetchQuestion(); // No saved question, fetch a new one
+      // Get selected difficulty from localStorage
+      const difficultyData = localStorage.getItem("selectedDifficulty");
+      if (difficultyData) {
+        const { level, count } = JSON.parse(difficultyData);
+        setTotalQuestions(count);
+        localStorage.setItem("codingQuestionsTotal", count.toString());
+        fetchQuestion(level.toLowerCase());
+      } else {
+        // No difficulty selected, use default
+        setTotalQuestions(3);
+        localStorage.setItem("codingQuestionsTotal", "3");
+        fetchQuestion("easy");
+      }
     }
   }, []);
 
@@ -78,16 +97,78 @@ const Coding = () => {
     setAllTestsRun(false);
   }, [language]);
 
-  const fetchQuestion = () => {
+  const fetchQuestion = (difficultyLevel) => {
+    // Calculate and add points from current question before loading a new one
+    if (testResults.length > 0) {
+      let pointsEarned = 0;
+      testResults.forEach((result) => {
+        if (result && result.passed) {
+          pointsEarned += 5; // 5 points per passing test
+        }
+      });
+
+      // Update score
+      const newScore = score + pointsEarned;
+      setScore(newScore);
+      localStorage.setItem("codingAssessmentScore", newScore.toString());
+    }
+
     setLoading(true);
     setResults(null);
     setTestResults([]);
     setIsAccepted(false); // Reset the accepted state
     setAllTestsRun(false);
 
-    fetch(`${API_URL}/get_question`)
+    // If this is a new question in an active assessment, update the attempt count
+    if (!assessmentComplete && questionsAttempted < totalQuestions) {
+      const newQuestionsAttempted = questionsAttempted + 1;
+      setQuestionsAttempted(newQuestionsAttempted);
+      localStorage.setItem(
+        "codingQuestionsAttempted",
+        newQuestionsAttempted.toString()
+      );
+
+      // Check if assessment is complete after this question
+      if (newQuestionsAttempted >= totalQuestions) {
+        setAssessmentComplete(true);
+      }
+    }
+
+    // Get difficulty from localStorage if not provided
+    let selectedDifficulty = difficultyLevel;
+    if (!selectedDifficulty) {
+      const difficultyData = localStorage.getItem("selectedDifficulty");
+      if (difficultyData) {
+        const { level } = JSON.parse(difficultyData);
+        selectedDifficulty = level.toLowerCase();
+      } else {
+        selectedDifficulty = "easy";
+      }
+    }
+
+    // Store the difficulty in localStorage to ensure consistency
+    if (!localStorage.getItem("assessmentDifficulty")) {
+      localStorage.setItem("assessmentDifficulty", selectedDifficulty);
+    } else {
+      // Always use the stored assessment difficulty to maintain consistency
+      selectedDifficulty = localStorage.getItem("assessmentDifficulty");
+    }
+
+    fetch(`${API_URL}/get_question?difficulty=${selectedDifficulty}`)
       .then((response) => response.json())
       .then((data) => {
+        // Ensure the question matches our selected difficulty
+        if (
+          data.difficulty &&
+          data.difficulty.toLowerCase() !== selectedDifficulty
+        ) {
+          console.log(
+            `Received ${data.difficulty} question instead of ${selectedDifficulty}, retrying...`
+          );
+          fetchQuestion(selectedDifficulty);
+          return;
+        }
+
         setQuestion(data);
         // Initialize code editor with function signatures using LeetCode templates
         const javaTemplate = data.function_signature?.java
@@ -138,6 +219,138 @@ public:
       .catch((error) => {
         console.error("Error fetching question:", error);
         setLoading(false);
+      });
+  };
+
+  const moveToNextQuestion = () => {
+    // Note: Don't update questionsAttempted here, since it's now handled in fetchQuestion
+
+    // Fetch next question with the same difficulty level as current assessment
+    const storedDifficulty = localStorage.getItem("assessmentDifficulty");
+    if (storedDifficulty) {
+      fetchQuestion(storedDifficulty);
+    } else {
+      // If no stored difficulty (shouldn't happen), check selectedDifficulty
+      const difficultyData = localStorage.getItem("selectedDifficulty");
+      if (difficultyData) {
+        const { level } = JSON.parse(difficultyData);
+        const difficulty = level.toLowerCase();
+        // Store it for future consistency
+        localStorage.setItem("assessmentDifficulty", difficulty);
+        fetchQuestion(difficulty);
+      } else {
+        // Fallback to easy as default
+        localStorage.setItem("assessmentDifficulty", "easy");
+        fetchQuestion("easy");
+      }
+    }
+  };
+
+  const updateScore = (testResults) => {
+    // Calculate score based on test cases - 5 points per passing test
+    let scoreForThisQuestion = 0;
+    testResults.forEach((result) => {
+      if (result && result.passed) {
+        scoreForThisQuestion += 5;
+      }
+    });
+
+    // Update total score
+    const newScore = score + scoreForThisQuestion;
+    setScore(newScore);
+    localStorage.setItem("codingAssessmentScore", newScore.toString());
+    return scoreForThisQuestion;
+  };
+
+  const endAssessment = () => {
+    // Calculate any remaining points from current test results
+    if (testResults.length > 0) {
+      let pointsEarned = 0;
+      testResults.forEach((result) => {
+        if (result && result.passed) {
+          pointsEarned += 5; // 5 points per passing test
+        }
+      });
+
+      // Update the final score
+      const newScore = score + pointsEarned;
+      setScore(newScore);
+      localStorage.setItem("codingAssessmentScore", newScore.toString());
+    }
+
+    // Mark assessment as complete
+    setAssessmentComplete(true);
+    localStorage.setItem("codingQuestionsAttempted", totalQuestions.toString());
+
+    // Navigate to the results page
+    window.location.href = "/results";
+  };
+
+  const submitAll = () => {
+    // Calculate final score if there are any unscored test results
+    if (testResults.length > 0) {
+      let pointsEarned = 0;
+      testResults.forEach((result) => {
+        if (result && result.passed) {
+          pointsEarned += 5; // 5 points per passing test
+        }
+      });
+
+      // Update score
+      const newScore = score + pointsEarned;
+      setScore(newScore);
+      localStorage.setItem("codingAssessmentScore", newScore.toString());
+    }
+
+    // Set assessment as complete
+    setAssessmentComplete(true);
+    localStorage.setItem("codingQuestionsAttempted", totalQuestions.toString());
+
+    // Navigate to results page
+    window.location.href = "/results";
+  };
+
+  const handleSubmit = () => {
+    // Check if all test cases have been run
+    if (!allTestsRun) {
+      alert("Please run all test cases before submitting your solution.");
+      return;
+    }
+
+    setSubmitting(true);
+    setResults(null);
+
+    fetch(`${API_URL}/submit_solution`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        question_description: question.description,
+        examples: question.examples,
+        language: language,
+        code: code[language],
+      }),
+    })
+      .then((response) => response.json())
+      .then((data) => {
+        setResults(data);
+        setSubmitting(false);
+
+        // Set isAccepted to true if all tests passed
+        if (data.success === true) {
+          setIsAccepted(true);
+          // Update score based on test results
+          updateScore(testResults);
+        }
+      })
+      .catch((error) => {
+        console.error("Error submitting code:", error);
+        setSubmitting(false);
+        setResults({
+          success: false,
+          error: "Failed to submit solution. Please try again.",
+        });
       });
   };
 
@@ -229,48 +442,6 @@ public:
       });
   };
 
-  const handleSubmit = () => {
-    // Check if all test cases have been run
-    if (!allTestsRun) {
-      alert("Please run all test cases before submitting your solution.");
-      return;
-    }
-
-    setSubmitting(true);
-    setResults(null);
-
-    fetch(`${API_URL}/submit_solution`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        question_description: question.description,
-        examples: question.examples,
-        language: language,
-        code: code[language],
-      }),
-    })
-      .then((response) => response.json())
-      .then((data) => {
-        setResults(data);
-        setSubmitting(false);
-
-        // Set isAccepted to true if all tests passed
-        if (data.success === true) {
-          setIsAccepted(true);
-        }
-      })
-      .catch((error) => {
-        console.error("Error submitting code:", error);
-        setSubmitting(false);
-        setResults({
-          success: false,
-          error: "Failed to submit solution. Please try again.",
-        });
-      });
-  };
-
   // Helper function to convert difficulty to color
   const difficultyColor = (difficulty) => {
     switch (difficulty.toLowerCase()) {
@@ -312,32 +483,75 @@ public:
         <div
           style={{
             display: "flex",
-            justifyContent: "space-between",
+            justifyContent: "flex-end",
             alignItems: "center",
             marginBottom: "15px",
           }}
         >
-          <h1
-            style={{ color: "#f8f8f2", fontSize: "24px", fontWeight: "bold" }}
-          >
-            📌 Coding Question
-          </h1>
-          <button
-            onClick={fetchQuestion}
+          <div
             style={{
-              backgroundColor: "#bd93f9",
-              color: "white",
-              border: "none",
-              padding: "8px 12px",
-              borderRadius: "4px",
-              cursor: "pointer",
-              fontWeight: "bold",
-              fontSize: "14px",
-              marginLeft: "15px",
+              display: "flex",
+              alignItems: "center",
+              marginRight: "auto",
             }}
           >
-            {loading ? "Loading..." : "New Question"}
-          </button>
+            <div
+              style={{
+                backgroundColor: "#44475a",
+                padding: "6px 10px",
+                borderRadius: "4px",
+                marginRight: "10px",
+              }}
+            >
+              <span style={{ fontSize: "14px", fontWeight: "bold" }}>
+                Question {questionsAttempted + 1}/{totalQuestions}
+              </span>
+            </div>
+            <div
+              style={{
+                backgroundColor: "#bd93f9",
+                padding: "6px 10px",
+                borderRadius: "4px",
+              }}
+            >
+              <span style={{ fontSize: "14px", fontWeight: "bold" }}>
+                Score: {score} points
+              </span>
+            </div>
+          </div>
+          {questionsAttempted >= totalQuestions - 1 ? (
+            <button
+              onClick={submitAll}
+              style={{
+                backgroundColor: "#50fa7b",
+                color: "#282a36",
+                border: "none",
+                padding: "8px 12px",
+                borderRadius: "4px",
+                cursor: "pointer",
+                fontWeight: "bold",
+                fontSize: "14px",
+              }}
+            >
+              Submit All
+            </button>
+          ) : (
+            <button
+              onClick={fetchQuestion}
+              style={{
+                backgroundColor: "#bd93f9",
+                color: "white",
+                border: "none",
+                padding: "8px 12px",
+                borderRadius: "4px",
+                cursor: "pointer",
+                fontWeight: "bold",
+                fontSize: "14px",
+              }}
+            >
+              {loading ? "Loading..." : "New Question"}
+            </button>
+          )}
         </div>
 
         <hr style={{ borderColor: "#6272a4" }} />
@@ -534,6 +748,55 @@ public:
             )}
           </>
         )}
+
+        {/* Assessment completed section */}
+        {assessmentComplete && (
+          <div
+            style={{
+              marginTop: "20px",
+              padding: "20px",
+              backgroundColor: "#44475a",
+              borderRadius: "8px",
+              textAlign: "center",
+            }}
+          >
+            <h3
+              style={{
+                color: "#50fa7b",
+                fontSize: "20px",
+                marginBottom: "10px",
+              }}
+            >
+              Assessment Completed!
+            </h3>
+            <p style={{ marginBottom: "15px" }}>
+              You have completed all {totalQuestions} questions.
+            </p>
+            <p
+              style={{
+                fontSize: "18px",
+                fontWeight: "bold",
+                marginBottom: "20px",
+              }}
+            >
+              Final Score: {score}/{totalQuestions}
+            </p>
+            <button
+              onClick={endAssessment}
+              style={{
+                backgroundColor: "#ff79c6",
+                color: "white",
+                border: "none",
+                padding: "10px 15px",
+                borderRadius: "4px",
+                cursor: "pointer",
+                fontWeight: "bold",
+              }}
+            >
+              End Assessment
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Coding Box */}
@@ -666,66 +929,93 @@ public:
           </div>
         )}
 
-        {/* Submit Button */}
-        {isAccepted ? (
-          <button
-            style={{
-              marginTop: "10px",
-              backgroundColor: "#50fa7b",
-              color: "#282a36",
-              border: "none",
-              padding: "10px 15px",
-              borderRadius: "4px",
-              cursor: "pointer",
-              fontWeight: "bold",
-              fontSize: "16px",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-            }}
-          >
-            ✨ Accepted ✨
-          </button>
-        ) : (
-          <button
-            onClick={handleSubmit}
-            disabled={loading || submitting || !allTestsRun}
-            style={{
-              marginTop: "10px",
-              backgroundColor:
-                loading || submitting
-                  ? "#6272a4"
-                  : !allTestsRun
-                  ? "#6272a4"
-                  : testResults.some((result) => result && !result.passed)
-                  ? "#ff5555" // Red for failed tests
-                  : "#50fa7b", // Green for passed tests
-              color: "#f8f8f2",
-              border: "none",
-              padding: "10px 15px",
-              borderRadius: "4px",
-              cursor:
-                loading || submitting || !allTestsRun
-                  ? "not-allowed"
-                  : "pointer",
-              fontWeight: "bold",
-              fontSize: "16px",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-            }}
-          >
-            {submitting
-              ? "Evaluating..."
-              : !allTestsRun
-              ? "Run All Tests First"
-              : testResults.some((result) => result && !result.passed)
-              ? `❌ Wrong Answer (${
-                  testResults.filter((result) => result && result.passed).length
-                }/${testResults.length} passed)`
-              : "✅ Correct Answer - Submit Solution"}
-          </button>
-        )}
+        {/* Submit & Next Question Buttons */}
+        <div style={{ display: "flex", gap: "10px" }}>
+          {isAccepted ? (
+            <button
+              onClick={moveToNextQuestion}
+              style={{
+                flex: 1,
+                marginTop: "10px",
+                backgroundColor: "#50fa7b",
+                color: "#282a36",
+                border: "none",
+                padding: "10px 15px",
+                borderRadius: "4px",
+                cursor: "pointer",
+                fontWeight: "bold",
+                fontSize: "16px",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              {questionsAttempted >= totalQuestions
+                ? "Complete Assessment"
+                : "Next Question →"}
+            </button>
+          ) : (
+            <button
+              onClick={handleSubmit}
+              disabled={loading || submitting || !allTestsRun}
+              style={{
+                flex: 1,
+                marginTop: "10px",
+                backgroundColor:
+                  loading || submitting
+                    ? "#6272a4"
+                    : !allTestsRun
+                    ? "#6272a4"
+                    : testResults.some((result) => result && !result.passed)
+                    ? "#ff5555" // Red for failed tests
+                    : "#50fa7b", // Green for passed tests
+                color: "#f8f8f2",
+                border: "none",
+                padding: "10px 15px",
+                borderRadius: "4px",
+                cursor:
+                  loading || submitting || !allTestsRun
+                    ? "not-allowed"
+                    : "pointer",
+                fontWeight: "bold",
+                fontSize: "16px",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              {submitting
+                ? "Evaluating..."
+                : !allTestsRun
+                ? "Run All Tests First"
+                : testResults.some((result) => result && !result.passed)
+                ? `❌ Wrong Answer (${
+                    testResults.filter((result) => result && result.passed)
+                      .length
+                  }/${testResults.length} passed)`
+                : "✅ Correct Answer - Submit Solution"}
+            </button>
+          )}
+
+          {!assessmentComplete && (
+            <button
+              onClick={endAssessment}
+              style={{
+                marginTop: "10px",
+                backgroundColor: "#ff5555",
+                color: "white",
+                border: "none",
+                padding: "10px 15px",
+                borderRadius: "4px",
+                cursor: "pointer",
+                fontWeight: "bold",
+                fontSize: "16px",
+              }}
+            >
+              End Assessment
+            </button>
+          )}
+        </div>
 
         {/* Results Section */}
         {results && (

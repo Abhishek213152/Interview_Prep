@@ -50,6 +50,29 @@ const Difficulty = () => {
     setSelectedDifficulty({ level, count });
   };
 
+  const handleStartPractice = () => {
+    // Store selected difficulty and count in localStorage
+    localStorage.setItem(
+      "selectedDifficulty",
+      JSON.stringify(selectedDifficulty)
+    );
+
+    // Reset the assessment data if any exists
+    localStorage.removeItem("codingAssessmentScore");
+    localStorage.removeItem("codingQuestionsAttempted");
+    localStorage.removeItem("codingQuestionsTotal");
+
+    // Reset and store the new assessment difficulty
+    localStorage.removeItem("assessmentDifficulty");
+    localStorage.setItem(
+      "assessmentDifficulty",
+      selectedDifficulty.level.toLowerCase()
+    );
+
+    // Navigate to coding page
+    navigate("/coding");
+  };
+
   return (
     <div className="bg-gradient-to-r from-black to-blue-900 text-white min-h-screen">
       <header className="flex justify-between items-center p-6 bg-gray-900 shadow-lg">
@@ -93,6 +116,15 @@ const Difficulty = () => {
       </header>
 
       <div className="max-w-4xl mx-auto py-16 px-6">
+        <div className="text-center mb-12">
+          <h2 className="text-3xl font-bold mb-4">
+            Select Challenge Difficulty
+          </h2>
+          <p className="text-gray-300 text-lg">
+            Choose the difficulty level and number of questions for your coding
+            practice
+          </p>
+        </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {difficultyOptions.map((item, index) => (
@@ -130,7 +162,7 @@ const Difficulty = () => {
           <div className="mt-8 flex justify-center">
             <button
               className="bg-blue-600 hover:bg-blue-700 px-8 py-3 rounded-lg text-lg font-medium transition-all"
-              onClick={() => navigate("/coding")}
+              onClick={handleStartPractice}
             >
               Start Practice
             </button>

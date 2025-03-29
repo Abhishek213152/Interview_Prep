@@ -9,6 +9,9 @@ import Signup from "./components/Signup";
 import Interview from "./components/Interview";
 import Difficulty from "./components/Difficulty";
 import Ended from "./components/Ended";
+import Result from "./components/Result";
+import Results from "./components/Results";
+
 const App = () => {
   return (
     <div>
@@ -22,6 +25,8 @@ const App = () => {
         <Route path="/interview" element={<Interview />} />
         <Route path="/difficulty" element={<Difficulty />} />
         <Route path="/ended" element={<Ended />} />
+        <Route path="/result" element={<Result />} />
+        <Route path="/results" element={<Results />} />
       </Routes>
     </div>
   );

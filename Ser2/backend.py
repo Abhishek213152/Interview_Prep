@@ -437,17 +437,20 @@ def parse_question_response(text):
 
 @app.route('/get_question', methods=['GET'])
 def get_question():
-    """API endpoint to get a random DSA question."""
-    difficulty = request.args.get('difficulty', 'easy')
-    force_new = request.args.get('force_new', 'false').lower() == 'true'
-    
-    # Check if we need to force a new question
-    response_data = get_random_problem(difficulty)
-    
-    # Add a timestamp to prevent client-side caching
-    response_data["timestamp"] = int(time.time())
-    
-    return jsonify(response_data)
+    try:
+        # Get difficulty parameter from request
+        difficulty = request.args.get('difficulty', 'easy').lower()
+        
+        # Validate difficulty
+        if difficulty not in ['easy', 'medium', 'hard']:
+            difficulty = 'easy'  # Default to easy if invalid
+            
+        # Get a random problem of the specified difficulty
+        question = get_random_problem(difficulty)
+        return jsonify(question)
+    except Exception as e:
+        print(f"Error in get_question: {e}")
+        return jsonify({"error": str(e)}), 500
 
 @app.route('/run_test_case', methods=['POST'])
 def run_test_case():
