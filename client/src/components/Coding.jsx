@@ -176,11 +176,13 @@ const Coding = () => {
     ${data.function_signature.java.replace(
       /\/\/.*?}/,
       `
+        // Write your code here
     }
 }`
     )}`
           : `class Solution {
     public int[] twoSum(int[] nums, int target) {
+        // Write your code here
         
     }
 }`;
@@ -190,11 +192,15 @@ const Coding = () => {
           cpp: data.function_signature?.cpp
             ? `class Solution {
 public:
-    ${data.function_signature.cpp.replace(/\/\/.*?}/, "\n    }")}
+    ${data.function_signature.cpp.replace(
+      /\/\/.*?}/,
+      "\n    // Write your code here\n    }"
+    )}
 };`
             : `class Solution {
 public:
     vector<int> twoSum(vector<int>& nums, int target) {
+        // Write your code here
         
     }
 };`,
@@ -203,9 +209,11 @@ public:
     ${data.function_signature.python
       .replace(/#.*$/gm, "")
       .trim()
-      .replace(/pass/, "")}`
+      .replace(/pass/, "        # Write your code here\n        pass")}`
             : `class Solution:
     def twoSum(self, nums: List[int], target: int) -> List[int]:
+        # Write your code here
+        pass
         `,
         };
 

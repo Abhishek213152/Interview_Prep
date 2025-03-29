@@ -16,9 +16,13 @@ const Home = () => {
       if (currentUser) {
         const userDoc = await getDoc(doc(db, "Users", currentUser.uid));
         if (userDoc.exists()) {
-          setUser(userDoc.data());  // Update state with user details
+          setUser(userDoc.data()); // Update state with user details
         } else {
-          setUser({ firstName: "Guest", lastName: "", email: currentUser.email });
+          setUser({
+            firstName: "Guest",
+            lastName: "",
+            email: currentUser.email,
+          });
         }
       } else {
         setUser(null);
@@ -75,33 +79,108 @@ const Home = () => {
         )}
       </header>
 
-      <section className="text-center py-20 px-6">
+      <section className="text-center py-12 px-6">
         <h1 className="text-5xl font-bold">AI-Powered Placement Preparation</h1>
         <p className="text-lg text-gray-300 mt-4 max-w-3xl mx-auto">
           Prepare for your dream job with AI-driven coding practice and resume
           analysis.
         </p>
-        <div className="mt-6 flex flex-wrap justify-center space-x-4">
-          <Link to="/difficulty">
-            <Button
-              className="bg-blue-600 hover:bg-blue-700 px-6 py-3"
-              // onClick={() => navigate("/coding")}
-            >
-              Coding Assessment
-            </Button>
-          </Link>
-          <Button
-            className="bg-green-600 hover:bg-green-700 px-6 py-3"
-            onClick={() => navigate("/resume")}
-          >
-            Scan Resume
-          </Button>
-          <Button
-            className="bg-purple-600 hover:bg-purple-700 px-6 py-3"
-            onClick={() => navigate("/interview")}
-          >
-            AI Voice Interview
-          </Button>
+
+        <div className="mt-12 max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-3 gap-8 px-4">
+          <div className="bg-gray-800 rounded-xl shadow-lg hover:shadow-xl transition-all overflow-hidden transform hover:-translate-y-1 duration-300">
+            <div className="h-1 bg-blue-500"></div>
+            <div className="p-6">
+              <div className="w-16 h-16 bg-blue-500 rounded-lg flex items-center justify-center mx-auto mb-6">
+                <FaFileAlt className="text-white text-2xl" />
+              </div>
+              <h3 className="text-xl font-bold mb-3">Coding Assessment</h3>
+              <p className="text-gray-400 mb-6">
+                Practice algorithmic challenges across various difficulty levels
+                to improve your problem-solving skills.
+              </p>
+              <Link to="/difficulty" className="block">
+                <button className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-3 px-4 rounded-lg transition-colors duration-300 flex items-center justify-center">
+                  Get Started
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    className="h-5 w-5 ml-2"
+                    viewBox="0 0 20 20"
+                    fill="currentColor"
+                  >
+                    <path
+                      fillRule="evenodd"
+                      d="M10.293 5.293a1 1 0 011.414 0l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414-1.414L12.586 11H5a1 1 0 110-2h7.586l-2.293-2.293a1 1 0 010-1.414z"
+                      clipRule="evenodd"
+                    />
+                  </svg>
+                </button>
+              </Link>
+            </div>
+          </div>
+
+          <div className="bg-gray-800 rounded-xl shadow-lg hover:shadow-xl transition-all overflow-hidden transform hover:-translate-y-1 duration-300">
+            <div className="h-1 bg-green-500"></div>
+            <div className="p-6">
+              <div className="w-16 h-16 bg-green-500 rounded-lg flex items-center justify-center mx-auto mb-6">
+                <FaSearch className="text-white text-2xl" />
+              </div>
+              <h3 className="text-xl font-bold mb-3">Scan Resume</h3>
+              <p className="text-gray-400 mb-6">
+                Get personalized AI feedback to improve your resume and boost
+                your chances of landing interviews with top companies.
+              </p>
+              <button
+                onClick={() => navigate("/resume")}
+                className="w-full bg-green-600 hover:bg-green-700 text-white font-medium py-3 px-4 rounded-lg transition-colors duration-300 flex items-center justify-center"
+              >
+                Analyze Now
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  className="h-5 w-5 ml-2"
+                  viewBox="0 0 20 20"
+                  fill="currentColor"
+                >
+                  <path
+                    fillRule="evenodd"
+                    d="M10.293 5.293a1 1 0 011.414 0l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414-1.414L12.586 11H5a1 1 0 110-2h7.586l-2.293-2.293a1 1 0 010-1.414z"
+                    clipRule="evenodd"
+                  />
+                </svg>
+              </button>
+            </div>
+          </div>
+
+          <div className="bg-gray-800 rounded-xl shadow-lg hover:shadow-xl transition-all overflow-hidden transform hover:-translate-y-1 duration-300">
+            <div className="h-1 bg-purple-500"></div>
+            <div className="p-6">
+              <div className="w-16 h-16 bg-purple-500 rounded-lg flex items-center justify-center mx-auto mb-6">
+                <FaRobot className="text-white text-2xl" />
+              </div>
+              <h3 className="text-xl font-bold mb-3">AI Voice Interview</h3>
+              <p className="text-gray-400 mb-6">
+                Simulate technical interviews with our AI interviewer and get
+                real-time feedback to boost your confidence.
+              </p>
+              <button
+                onClick={() => navigate("/interview")}
+                className="w-full bg-purple-600 hover:bg-purple-700 text-white font-medium py-3 px-4 rounded-lg transition-colors duration-300 flex items-center justify-center"
+              >
+                Start Interview
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  className="h-5 w-5 ml-2"
+                  viewBox="0 0 20 20"
+                  fill="currentColor"
+                >
+                  <path
+                    fillRule="evenodd"
+                    d="M10.293 5.293a1 1 0 011.414 0l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414-1.414L12.586 11H5a1 1 0 110-2h7.586l-2.293-2.293a1 1 0 010-1.414z"
+                    clipRule="evenodd"
+                  />
+                </svg>
+              </button>
+            </div>
+          </div>
         </div>
       </section>
 
@@ -140,4 +219,3 @@ const FeatureCard = ({ icon, title, desc }) => (
 );
 
 export default Home;
-
