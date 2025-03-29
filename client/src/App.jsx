@@ -7,7 +7,8 @@ import LandingPage from "./components/LandingPage";
 import Login from "./components/Login";
 import Signup from "./components/Signup";
 import Interview from "./components/Interview";
-
+import Difficulty from "./components/Difficulty";
+import Ended from "./components/Ended";
 const App = () => {
   return (
     <div>
@@ -19,6 +20,8 @@ const App = () => {
         <Route path="/resume" element={<Sidebar />} />
         <Route path="/coding" element={<Coding />} />
         <Route path="/interview" element={<Interview />} />
+        <Route path="/difficulty" element={<Difficulty />} />
+        <Route path="/ended" element={<Ended />} />
       </Routes>
     </div>
   );

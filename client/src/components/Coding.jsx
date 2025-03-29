@@ -40,6 +40,7 @@ const Coding = () => {
   const [results, setResults] = useState(null);
   const [testResults, setTestResults] = useState([]);
   const [runningTest, setRunningTest] = useState(null);
+  const [allTestsRun, setAllTestsRun] = useState(false);
   const editorRef = useRef(null);
 
   // Map language names to Monaco editor language identifiers
@@ -50,12 +51,31 @@ const Coding = () => {
   };
 
   useEffect(() => {
-    fetchQuestion();
+    // Try to load saved question from localStorage first
+    const savedQuestion = localStorage.getItem("codingQuestion");
+    const savedCode = localStorage.getItem("codingCode");
+
+    if (savedQuestion && savedCode) {
+      try {
+        const parsedQuestion = JSON.parse(savedQuestion);
+        const parsedCode = JSON.parse(savedCode);
+
+        setQuestion(parsedQuestion);
+        setCode(parsedCode);
+        setLoading(false);
+      } catch (error) {
+        console.error("Error parsing saved question:", error);
+        fetchQuestion(); // Fallback to fetching a new question
+      }
+    } else {
+      fetchQuestion(); // No saved question, fetch a new one
+    }
   }, []);
 
   // Reset test results when changing language
   useEffect(() => {
     setTestResults([]);
+    setAllTestsRun(false);
   }, [language]);
 
   const fetchQuestion = () => {
@@ -63,18 +83,57 @@ const Coding = () => {
     setResults(null);
     setTestResults([]);
     setIsAccepted(false); // Reset the accepted state
+    setAllTestsRun(false);
 
     fetch(`${API_URL}/get_question`)
       .then((response) => response.json())
       .then((data) => {
         setQuestion(data);
-        // Initialize code editor with function signatures
-        setCode({
-          java: data.function_signature?.java || "// Add your solution here",
-          cpp: data.function_signature?.cpp || "// Add your solution here",
-          python: data.function_signature?.python || "# Add your solution here",
-        });
+        // Initialize code editor with function signatures using LeetCode templates
+        const javaTemplate = data.function_signature?.java
+          ? `class Solution {
+    ${data.function_signature.java.replace(
+      /\/\/.*?}/,
+      `
+    }
+}`
+    )}`
+          : `class Solution {
+    public int[] twoSum(int[] nums, int target) {
+        
+    }
+}`;
+
+        const newCode = {
+          java: javaTemplate,
+          cpp: data.function_signature?.cpp
+            ? `class Solution {
+public:
+    ${data.function_signature.cpp.replace(/\/\/.*?}/, "\n    }")}
+};`
+            : `class Solution {
+public:
+    vector<int> twoSum(vector<int>& nums, int target) {
+        
+    }
+};`,
+          python: data.function_signature?.python
+            ? `class Solution:
+    ${data.function_signature.python
+      .replace(/#.*$/gm, "")
+      .trim()
+      .replace(/pass/, "")}`
+            : `class Solution:
+    def twoSum(self, nums: List[int], target: int) -> List[int]:
+        `,
+        };
+
+        setCode(newCode);
         setLoading(false);
+
+        // Save question and code to localStorage
+        localStorage.setItem("codingQuestion", JSON.stringify(data));
+        localStorage.setItem("codingCode", JSON.stringify(newCode));
       })
       .catch((error) => {
         console.error("Error fetching question:", error);
@@ -91,7 +150,10 @@ const Coding = () => {
       scrollBeyondLastLine: false,
       minimap: { enabled: true },
       fontFamily: "'Fira Code', 'Consolas', monospace",
-      fontSize: 14,
+      fontSize:
+        language === "java" || language === "cpp" || language === "python"
+          ? 16
+          : 14, // Bigger font for all languages
       lineNumbers: "on",
       matchBrackets: "always",
       automaticLayout: true,
@@ -117,9 +179,13 @@ const Coding = () => {
   };
 
   const handleCodeChange = (value) => {
-    setCode({ ...code, [language]: value });
+    const updatedCode = { ...code, [language]: value };
+    setCode(updatedCode);
+    // Save updated code to localStorage
+    localStorage.setItem("codingCode", JSON.stringify(updatedCode));
     // Clear test results when code changes
     setTestResults([]);
+    setAllTestsRun(false);
   };
 
   const runTestCase = (index) => {
@@ -144,6 +210,10 @@ const Coding = () => {
         newTestResults[index] = data;
         setTestResults(newTestResults);
         setRunningTest(null);
+
+        // Check if all test cases have been run
+        const allRun = question.examples.every((_, i) => newTestResults[i]);
+        setAllTestsRun(allRun);
       })
       .catch((error) => {
         console.error("Error running test case:", error);
@@ -160,6 +230,12 @@ const Coding = () => {
   };
 
   const handleSubmit = () => {
+    // Check if all test cases have been run
+    if (!allTestsRun) {
+      alert("Please run all test cases before submitting your solution.");
+      return;
+    }
+
     setSubmitting(true);
     setResults(null);
 
@@ -238,6 +314,7 @@ const Coding = () => {
             display: "flex",
             justifyContent: "space-between",
             alignItems: "center",
+            marginBottom: "15px",
           }}
         >
           <h1
@@ -256,6 +333,7 @@ const Coding = () => {
               cursor: "pointer",
               fontWeight: "bold",
               fontSize: "14px",
+              marginLeft: "15px",
             }}
           >
             {loading ? "Loading..." : "New Question"}
@@ -273,11 +351,18 @@ const Coding = () => {
             <div
               style={{
                 display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
+                flexDirection: "column",
+                alignItems: "flex-start",
+                marginBottom: "10px",
               }}
             >
-              <h2 style={{ color: "#ff79c6", fontSize: "20px" }}>
+              <h2
+                style={{
+                  color: "#ff79c6",
+                  fontSize: "20px",
+                  marginBottom: "5px",
+                }}
+              >
                 {question.title}
               </h2>
               <span
@@ -373,9 +458,15 @@ const Coding = () => {
                     </div>
                   </div>
                   <div>
-                    <strong>Input:</strong> {JSON.stringify(example.input)}{" "}
+                    <strong>Input:</strong>{" "}
+                    {typeof example.input === "string"
+                      ? example.input.replace(/^["'`]+|["'`]+$/g, "")
+                      : JSON.stringify(example.input)}{" "}
                     <br />
-                    <strong>Output:</strong> {JSON.stringify(example.output)}
+                    <strong>Output:</strong>{" "}
+                    {typeof example.output === "string"
+                      ? example.output.replace(/^["'`]+|["'`]+$/g, "")
+                      : JSON.stringify(example.output)}
                     {example.explanation && (
                       <>
                         <br />
@@ -399,7 +490,12 @@ const Coding = () => {
                     >
                       <div>
                         <strong>Your Output:</strong>{" "}
-                        {JSON.stringify(testResults[index].actual_output)}
+                        {typeof testResults[index].actual_output === "string"
+                          ? testResults[index].actual_output.replace(
+                              /^["'`]+|["'`]+$/g,
+                              ""
+                            )
+                          : JSON.stringify(testResults[index].actual_output)}
                       </div>
                       {!testResults[index].passed && (
                         <div>
@@ -494,7 +590,12 @@ const Coding = () => {
               scrollBeyondLastLine: false,
               minimap: { enabled: true },
               fontFamily: "'Fira Code', 'Consolas', monospace",
-              fontSize: 14,
+              fontSize:
+                language === "java" ||
+                language === "cpp" ||
+                language === "python"
+                  ? 16
+                  : 14, // Bigger font for all languages
               lineNumbers: "on",
               matchBrackets: "always",
               automaticLayout: true,
@@ -588,15 +689,25 @@ const Coding = () => {
         ) : (
           <button
             onClick={handleSubmit}
-            disabled={loading || submitting}
+            disabled={loading || submitting || !allTestsRun}
             style={{
               marginTop: "10px",
-              backgroundColor: loading || submitting ? "#6272a4" : "#50fa7b",
-              color: loading || submitting ? "#f8f8f2" : "#282a36",
+              backgroundColor:
+                loading || submitting
+                  ? "#6272a4"
+                  : !allTestsRun
+                  ? "#6272a4"
+                  : testResults.some((result) => result && !result.passed)
+                  ? "#ff5555" // Red for failed tests
+                  : "#50fa7b", // Green for passed tests
+              color: "#f8f8f2",
               border: "none",
               padding: "10px 15px",
               borderRadius: "4px",
-              cursor: loading || submitting ? "not-allowed" : "pointer",
+              cursor:
+                loading || submitting || !allTestsRun
+                  ? "not-allowed"
+                  : "pointer",
               fontWeight: "bold",
               fontSize: "16px",
               display: "flex",
@@ -604,7 +715,15 @@ const Coding = () => {
               justifyContent: "center",
             }}
           >
-            {submitting ? "Evaluating..." : "🚀 Submit Solution"}
+            {submitting
+              ? "Evaluating..."
+              : !allTestsRun
+              ? "Run All Tests First"
+              : testResults.some((result) => result && !result.passed)
+              ? `❌ Wrong Answer (${
+                  testResults.filter((result) => result && result.passed).length
+                }/${testResults.length} passed)`
+              : "✅ Correct Answer - Submit Solution"}
           </button>
         )}
 
@@ -665,15 +784,25 @@ const Coding = () => {
                     {!test.passed && (
                       <div style={{ marginTop: "5px" }}>
                         <div>
-                          <strong>Input:</strong> {JSON.stringify(test.input)}
+                          <strong>Input:</strong>{" "}
+                          {typeof test.input === "string"
+                            ? test.input.replace(/^["'`]+|["'`]+$/g, "")
+                            : JSON.stringify(test.input)}
                         </div>
                         <div>
                           <strong>Expected:</strong>{" "}
-                          {JSON.stringify(test.expected_output)}
+                          {typeof test.expected_output === "string"
+                            ? test.expected_output.replace(
+                                /^["'`]+|["'`]+$/g,
+                                ""
+                              )
+                            : JSON.stringify(test.expected_output)}
                         </div>
                         <div>
                           <strong>Your Output:</strong>{" "}
-                          {JSON.stringify(test.actual_output)}
+                          {typeof test.actual_output === "string"
+                            ? test.actual_output.replace(/^["'`]+|["'`]+$/g, "")
+                            : JSON.stringify(test.actual_output)}
                         </div>
                         {test.explanation && (
                           <div>

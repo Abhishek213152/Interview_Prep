@@ -1,7 +1,16 @@
 import React, { useState, useEffect, useRef } from "react";
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
-import { FaMicrophone, FaPause, FaFileUpload, FaSpinner } from "react-icons/fa";
+import {
+  FaMicrophone,
+  FaPause,
+  FaFileUpload,
+  FaSpinner,
+  FaUserTie,
+} from "react-icons/fa";
+import { signOut, onAuthStateChanged } from "firebase/auth";
+import { doc, getDoc } from "firebase/firestore";
+import { auth, db } from "../firebase";
 
 const Interview = () => {
   // State variables
@@ -20,6 +29,9 @@ const Interview = () => {
   const [lastSpeechTime, setLastSpeechTime] = useState(null);
   const silenceTimerRef = useRef(null);
   const [silenceCountdown, setSilenceCountdown] = useState(0);
+  const [user, setUser] = useState(null);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [isEnding, setIsEnding] = useState(false);
 
   // References
   const messagesEndRef = useRef(null);
@@ -31,6 +43,33 @@ const Interview = () => {
   // API endpoint
   const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5001";
   console.log("Using API URL:", API_URL); // Add logging to verify API URL
+
+  // Check for user authentication
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
+      if (currentUser) {
+        const userDoc = await getDoc(doc(db, "Users", currentUser.uid));
+        if (userDoc.exists()) {
+          setUser(userDoc.data()); // Update state with user details
+        } else {
+          setUser({
+            firstName: "Guest",
+            lastName: "",
+            email: currentUser.email,
+          });
+        }
+      } else {
+        setUser(null);
+      }
+    });
+
+    return () => unsubscribe(); // Cleanup listener
+  }, []);
+
+  const handleLogout = async () => {
+    await signOut(auth);
+    navigate("/"); // Redirect to landing page
+  };
 
   // Auto-start listening when the interview begins and after AI speaks
   useEffect(() => {
@@ -393,7 +432,13 @@ const Interview = () => {
   const endInterview = async () => {
     if (!sessionId) return;
 
+    // Show confirmation dialog
+    if (!confirm("Are you sure you want to end this interview?")) {
+      return; // Exit if user cancels
+    }
+
     setIsLoading(true);
+    setIsEnding(true); // Show the ending loader
 
     try {
       const response = await axios.post(`${API_URL}/end_interview`, {
@@ -404,15 +449,43 @@ const Interview = () => {
         setAssessment(response.data.assessment);
         stopSpeech();
         stopListening();
+
+        // Add a delay before redirecting to show the loader
+        setTimeout(() => {
+          // Store assessment data in localStorage before redirecting
+          localStorage.setItem(
+            "interviewAssessment",
+            JSON.stringify(response.data.assessment)
+          );
+          localStorage.setItem("interviewSessionId", sessionId);
+
+          // Use window.location.href for a full page reload to /ended
+          window.location.href = "/ended";
+        }, 2000); // 2 second delay for the loading animation
       } else {
         alert("Failed to end interview");
+        setIsEnding(false);
       }
     } catch (error) {
       console.error("Error ending interview:", error);
       alert("Error ending the interview. Please try again.");
+      setIsEnding(false);
     } finally {
       setIsLoading(false);
     }
+  };
+
+  // Reset the interview after viewing assessment
+  const resetInterview = () => {
+    // Reset all the interview-related states
+    setIsInterviewStarted(false);
+    setSessionId(null);
+    setMessages([]);
+    setAssessment(null);
+    setUserInput("");
+    // Stop any ongoing audio or speech
+    stopSpeech();
+    stopListening();
   };
 
   // Make sure the isSpeaking state properly controls the microphone
@@ -850,288 +923,259 @@ const Interview = () => {
     return null;
   };
 
+  // Render the Interview interface
   return (
-    <div className="interview-container max-w-4xl mx-auto p-4">
-      {!isInterviewStarted ? (
-        // Interview Setup Form
-        <div className="bg-white shadow-md rounded-lg p-6">
-          <h1 className="text-2xl font-bold mb-6 text-center">
-            AI Technical Interview
-          </h1>
-          <form onSubmit={startInterview}>
-            <div className="mb-4">
-              <label className="block text-gray-700 mb-2">Your Name</label>
-              <input
-                type="text"
-                className="w-full px-3 py-2 border rounded-lg"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                required
-              />
-            </div>
+    <div className="bg-gradient-to-r from-black to-blue-900 text-white min-h-screen">
+      {isEnding && (
+        <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50">
+          <div className="text-center">
+            <div className="inline-block animate-spin rounded-full h-16 w-16 border-t-4 border-blue-500 border-solid mb-4"></div>
+            <p className="text-xl font-bold text-white">Ending Interview...</p>
+            <p className="text-gray-300 mt-2">Processing your results</p>
+          </div>
+        </div>
+      )}
 
-            <div className="mb-6">
-              <label className="block text-gray-700 mb-2">Upload Resume</label>
+      <header className="flex justify-between items-center p-6 bg-gray-900 shadow-lg">
+        <h1 className="text-2xl font-bold">AI Interview Preparation</h1>
+
+        {user ? (
+          <div className="relative">
+            <div className="flex items-center space-x-4">
+              <div className="text-right">
+                <p className="text-lg font-semibold">
+                  {user.firstName} {user.lastName}
+                </p>
+                <p className="text-gray-400 text-sm">{user.email}</p>
+              </div>
               <div
-                className="border rounded-lg p-4 flex items-center justify-center cursor-pointer hover:bg-blue-50 transition"
-                onClick={() => document.getElementById("resume-upload").click()}
+                className="w-10 h-10 bg-gray-600 rounded-full flex items-center justify-center cursor-pointer"
+                onClick={() => setMenuOpen(!menuOpen)}
               >
-                <div className="flex flex-col items-center">
-                  <FaFileUpload className="text-3xl mb-2 text-blue-500" />
-                  <span className="text-sm text-gray-500">
-                    {resumeFile
-                      ? resumeFile.name
-                      : "Click to upload PDF/DOC/TXT"}
-                  </span>
-                  <input
-                    id="resume-upload"
-                    type="file"
-                    className="hidden"
-                    accept=".pdf,.doc,.docx,.txt,.rtf"
-                    onChange={handleFileChange}
-                  />
-                </div>
+                <FaUserTie className="text-white text-xl" />
               </div>
             </div>
-
-            <div className="mb-6 text-sm text-gray-600 p-2 bg-blue-50 rounded">
-              <p>
-                <span className="font-semibold">Voice Mode Enabled:</span> Your
-                interview will be conducted by our AI Interviewer.
-              </p>
-            </div>
-
-            <button
-              type="submit"
-              className="w-full bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700 transition"
-              disabled={isLoading}
-            >
-              {isLoading ? (
-                <FaSpinner className="animate-spin mx-auto" />
-              ) : (
-                "Start Interview"
-              )}
-            </button>
-          </form>
-        </div>
-      ) : (
-        // Interview Chat Interface
-        <div className="bg-white shadow-md rounded-lg overflow-hidden">
-          <div className="bg-blue-600 text-white p-4">
-            <h2 className="text-xl font-semibold">
-              Technical Interview with AI
-            </h2>
-            {sessionId && (
-              <p className="text-sm opacity-75">
-                Voice-based Interview Session: {sessionId}
-              </p>
+            {menuOpen && (
+              <div className="absolute right-0 mt-2 w-40 bg-gray-800 text-white rounded-lg shadow-lg">
+                <button
+                  className="block w-full text-left px-4 py-2 hover:bg-gray-700"
+                  onClick={handleLogout}
+                >
+                  Logout
+                </button>
+              </div>
             )}
           </div>
+        ) : (
+          <button
+            className="bg-blue-600 hover:bg-blue-700 px-6 py-2 rounded"
+            onClick={() => navigate("/login")}
+          >
+            Login
+          </button>
+        )}
+      </header>
 
-          {messages.length === 1 && (
-            <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 mt-4 mb-4">
-              <div className="flex">
-                <div className="flex-shrink-0">
-                  <svg
-                    className="h-5 w-5 text-yellow-400"
-                    viewBox="0 0 20 20"
-                    fill="currentColor"
-                  >
-                    <path
-                      fillRule="evenodd"
-                      d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z"
-                      clipRule="evenodd"
+      {!isInterviewStarted ? (
+        // Interview setup page
+        <div className="container mx-auto w-full px-4 mt-10">
+          <div className="bg-gray-800 rounded-lg shadow-lg p-6">
+            <h1 className="text-2xl font-bold mb-6 text-center text-white">
+              AI Technical Interview
+            </h1>
+            <form onSubmit={startInterview} className="space-y-4">
+              <div>
+                <label
+                  htmlFor="name"
+                  className="block text-sm font-medium text-white mb-1"
+                >
+                  Your Name
+                </label>
+                <input
+                  type="text"
+                  id="name"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  required
+                  className="w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="Enter your name"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-white mb-1">
+                  Upload Your Resume (Optional)
+                </label>
+                <div className="flex items-center justify-center w-full">
+                  <label className="flex flex-col rounded-lg border-2 border-dashed border-gray-600 w-full h-32 p-10 group text-center cursor-pointer hover:bg-gray-700">
+                    <div className="h-full w-full text-center flex flex-col items-center justify-center">
+                      <div className="flex flex-auto max-h-48 w-full mx-auto">
+                        {resumeFile ? (
+                          <p className="text-gray-300">
+                            {resumeFile.name} (
+                            {Math.round(resumeFile.size / 1024)} KB)
+                          </p>
+                        ) : (
+                          <FaFileUpload className="mx-auto text-gray-400 text-3xl" />
+                        )}
+                      </div>
+                      <p className="pointer-none text-gray-400 text-sm">
+                        <span className="text-blue-500 hover:underline">
+                          Click to upload
+                        </span>{" "}
+                        or drag and drop
+                      </p>
+                    </div>
+                    <input
+                      type="file"
+                      className="hidden"
+                      onChange={handleFileChange}
+                      accept=".pdf,.doc,.docx"
                     />
-                  </svg>
-                </div>
-                <div className="ml-3">
-                  <p className="text-sm text-yellow-700">
-                    This is a voice-based interview. Please speak your answers
-                    into your microphone when the interviewer asks a question.
-                    Your speech will be converted to text automatically.
-                  </p>
+                  </label>
                 </div>
               </div>
-            </div>
-          )}
 
-          {assessment ? (
-            // Assessment View
-            <div className="p-6">
-              <h2 className="text-2xl font-bold mb-4">Interview Assessment</h2>
-              {formatAssessment()}
               <button
-                onClick={() => navigate("/")}
-                className="mt-6 bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 transition"
+                type="submit"
+                className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline transition duration-300"
+                disabled={isLoading}
               >
-                Return Home
+                {isLoading ? (
+                  <div className="flex items-center justify-center">
+                    <FaSpinner className="animate-spin mr-2" />
+                    Starting Interview...
+                  </div>
+                ) : (
+                  "Start Interview"
+                )}
+              </button>
+            </form>
+          </div>
+        </div>
+      ) : (
+        // Active interview UI
+        <div className="container mx-auto w-full px-4 mt-6">
+          <div className="bg-gray-800 shadow-lg rounded-lg overflow-hidden">
+            <div className="bg-gray-900 text-white p-4 flex justify-between items-center">
+              <h2 className="text-xl font-bold">
+                AI Technical Interview Session
+              </h2>
+              <button
+                onClick={endInterview}
+                className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded transition"
+              >
+                End Interview
               </button>
             </div>
-          ) : (
-            // Chat View
-            <>
-              <div className="h-96 overflow-y-auto p-4">
-                {messages.map((msg, index) => (
+
+            {/* Interview chat history */}
+            <div className="p-4 h-[60vh] overflow-y-auto bg-gray-700">
+              {messages.map((msg, index) => (
+                <div
+                  key={index}
+                  className={`mb-4 ${
+                    msg.role === "user" ? "text-right" : "text-left"
+                  }`}
+                >
                   <div
-                    key={index}
-                    className={`mb-4 flex ${
-                      msg.role === "user" ? "justify-end" : "justify-start"
+                    className={`inline-block max-w-[70%] rounded-lg p-3 ${
+                      msg.role === "user"
+                        ? "bg-blue-600 text-white"
+                        : "bg-gray-800 text-white"
                     }`}
                   >
-                    <div
-                      className={`max-w-3/4 p-3 rounded-lg ${
-                        msg.role === "user"
-                          ? "bg-blue-100 text-gray-800"
-                          : "bg-gray-200 text-gray-800"
-                      }`}
-                    >
-                      {msg.content}
-                      {msg.role === "assistant" &&
-                        index === messages.length - 1 &&
-                        isSpeaking && (
-                          <div className="flex mt-2 justify-end">
-                            <div className="flex space-x-1 items-center">
-                              <span className="text-xs text-gray-500 mr-1">
-                                Speaking
-                              </span>
-                              <div className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-pulse"></div>
-                              <div
-                                className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-pulse"
-                                style={{ animationDelay: "0.2s" }}
-                              ></div>
-                              <div
-                                className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-pulse"
-                                style={{ animationDelay: "0.4s" }}
-                              ></div>
-                            </div>
-                          </div>
-                        )}
-                    </div>
+                    <p>{msg.content}</p>
                   </div>
-                ))}
-                {isLoading && (
-                  <div className="flex justify-start mb-4">
-                    <div className="bg-gray-200 p-3 rounded-lg text-gray-800">
-                      <div className="flex space-x-2">
-                        <div className="w-2 h-2 bg-gray-500 rounded-full animate-bounce"></div>
-                        <div
-                          className="w-2 h-2 bg-gray-500 rounded-full animate-bounce"
-                          style={{ animationDelay: "0.2s" }}
-                        ></div>
-                        <div
-                          className="w-2 h-2 bg-gray-500 rounded-full animate-bounce"
-                          style={{ animationDelay: "0.4s" }}
-                        ></div>
-                      </div>
-                    </div>
-                  </div>
-                )}
-                <div ref={messagesEndRef} />
-              </div>
+                </div>
+              ))}
+              <div ref={messagesEndRef} />
+            </div>
 
-              <div className="border-t p-4">
-                <div className="flex items-center">
+            {/* Speaking status indicator */}
+            <div className="px-4 py-2 bg-gray-800 border-t border-gray-700 text-center font-bold">
+              {isSpeaking ? (
+                <p className="text-red-500 text-lg">AI is speaking...</p>
+              ) : isInterviewStarted && !assessment ? (
+                <p className="text-green-500 text-lg">
+                  It's your turn to speak
+                </p>
+              ) : null}
+            </div>
+
+            {/* Input area */}
+            <div className="p-4 bg-gray-900 border-t border-gray-700">
+              {!assessment ? (
+                <div className="flex items-center space-x-2">
+                  <input
+                    type="text"
+                    value={userInput}
+                    onChange={(e) => setUserInput(e.target.value)}
+                    onKeyPress={(e) => {
+                      if (e.key === "Enter" && userInput.trim()) {
+                        sendResponse();
+                      }
+                    }}
+                    className="flex-1 px-4 py-2 bg-gray-700 text-white border border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="Type your response..."
+                    disabled={isSpeaking || isLoading}
+                  />
                   <button
-                    type="button"
+                    onClick={() => {
+                      if (userInput.trim()) {
+                        sendResponse();
+                      }
+                    }}
+                    className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition"
+                    disabled={isSpeaking || isLoading || !userInput.trim()}
+                  >
+                    Send
+                  </button>
+                  <button
                     onClick={toggleListening}
-                    className={`p-3 mr-3 rounded-full flex items-center justify-center ${
+                    className={`p-2 rounded-full transition ${
                       isListening
-                        ? "bg-red-500 text-white shadow-lg animate-pulse"
-                        : "bg-blue-500 text-white hover:bg-blue-600"
+                        ? "bg-red-500 hover:bg-red-600"
+                        : "bg-blue-600 hover:bg-blue-700"
                     }`}
-                    style={{ minWidth: "50px", height: "50px" }}
-                    title={isListening ? "Stop Listening" : "Start Listening"}
                   >
-                    <FaMicrophone size={24} />
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={isSpeaking ? stopSpeech : null}
-                    className={`p-2 mr-3 rounded-full ${
-                      isSpeaking
-                        ? "bg-yellow-500 text-white"
-                        : "bg-gray-200 text-gray-400"
-                    }`}
-                    disabled={!isSpeaking}
-                    title={isSpeaking ? "Stop Speaking" : "AI is not speaking"}
-                  >
-                    <FaPause />
-                  </button>
-
-                  {/* Show recognized speech as text without an input field */}
-                  {userInput && isListening && (
-                    <div className="flex-1 p-3 border border-blue-300 bg-blue-50 rounded-lg text-gray-700 relative">
-                      {userInput}
-                      <div className="absolute right-2 top-1/2 transform -translate-y-1/2">
-                        <div className="flex space-x-1">
-                          <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></div>
-                          <div
-                            className="w-2 h-2 bg-red-500 rounded-full animate-pulse"
-                            style={{ animationDelay: "0.2s" }}
-                          ></div>
-                          <div
-                            className="w-2 h-2 bg-red-500 rounded-full animate-pulse"
-                            style={{ animationDelay: "0.4s" }}
-                          ></div>
-                        </div>
-                      </div>
-                      {renderSilenceIndicator()}
-                    </div>
-                  )}
-
-                  {!userInput && isListening && (
-                    <div className="flex-1 p-3 border border-blue-200 bg-gray-50 rounded-lg text-gray-500 italic relative">
-                      Listening... speak clearly into your microphone
-                      <div className="absolute right-2 top-1/2 transform -translate-y-1/2">
-                        <div className="flex space-x-1">
-                          <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-                          <div
-                            className="w-2 h-2 bg-green-500 rounded-full animate-pulse"
-                            style={{ animationDelay: "0.2s" }}
-                          ></div>
-                          <div
-                            className="w-2 h-2 bg-green-500 rounded-full animate-pulse"
-                            style={{ animationDelay: "0.4s" }}
-                          ></div>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  {!isListening && (
-                    <div className="flex-1 p-3 border border-gray-200 bg-gray-50 rounded-lg text-gray-500 italic">
-                      Click the microphone button to start speaking
-                    </div>
-                  )}
-                </div>
-
-                <div className="flex justify-between items-center mt-4">
-                  <div className="text-sm text-gray-600">
                     {isListening ? (
-                      <span className="text-green-600 font-medium flex items-center">
-                        <span className="inline-block w-3 h-3 bg-green-600 rounded-full mr-2 animate-pulse"></span>
-                        Listening... speak clearly, your speech will be sent
-                        automatically.
-                      </span>
+                      <FaPause className="text-white" />
                     ) : (
-                      <span className="text-red-600 font-medium">
-                        Microphone inactive. Click the microphone icon to start
-                        speaking.
-                      </span>
+                      <FaMicrophone className="text-white" />
                     )}
-                  </div>
+                  </button>
+                </div>
+              ) : (
+                <div className="text-center py-4">
+                  <span className="text-2xl font-bold text-blue-400">
+                    Interview Completed!
+                  </span>
+                </div>
+              )}
+
+              {/* Silence indicator */}
+              {renderSilenceIndicator()}
+            </div>
+
+            {/* Assessment results */}
+            {assessment && (
+              <div className="p-6 bg-gray-800 border-t border-gray-700">
+                <h3 className="text-xl font-bold mb-4 text-blue-400">
+                  Interview Assessment
+                </h3>
+                <div className="space-y-4 text-white">{formatAssessment()}</div>
+                <div className="mt-6 text-center">
                   <button
-                    onClick={endInterview}
-                    className="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 transition"
-                    disabled={isLoading}
+                    onClick={resetInterview}
+                    className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded font-bold transition"
                   >
-                    End Interview
+                    Return to Setup
                   </button>
                 </div>
               </div>
-            </>
-          )}
+            )}
+          </div>
         </div>
       )}
     </div>

@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { FaRobot, FaUserTie, FaFileAlt, FaSearch } from "react-icons/fa";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import Button from "./Button";
 import { auth, db } from "../firebase";
 import { doc, getDoc } from "firebase/firestore";
@@ -82,12 +82,14 @@ const Home = () => {
           analysis.
         </p>
         <div className="mt-6 flex flex-wrap justify-center space-x-4">
-          <Button
-            className="bg-blue-600 hover:bg-blue-700 px-6 py-3"
-            onClick={() => navigate("/coding")}
-          >
-            Start Practicing
-          </Button>
+          <Link to="/difficulty">
+            <Button
+              className="bg-blue-600 hover:bg-blue-700 px-6 py-3"
+              // onClick={() => navigate("/coding")}
+            >
+              Start Practicing
+            </Button>
+          </Link>
           <Button
             className="bg-green-600 hover:bg-green-700 px-6 py-3"
             onClick={() => navigate("/resume")}

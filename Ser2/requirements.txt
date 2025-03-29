@@ -1,7 +1,0 @@
-flask==2.2.3
-flask-cors==3.0.10
-python-dotenv==1.0.0
-werkzeug==2.2.3
-beautifulsoup4==4.12.2
-requests==2.31.0
-html5lib==1.1 
