@@ -967,9 +967,15 @@ public:
                     : !allTestsRun
                     ? "#6272a4"
                     : testResults.some((result) => result && !result.passed)
-                    ? "#ff5555" // Red for failed tests
-                    : "#50fa7b", // Green for passed tests
-                color: "#f8f8f2",
+                    ? "#FFA500"
+                    : "#50fa7b",
+                color:
+                  testResults.some((result) => result && !result.passed) &&
+                  !loading &&
+                  !submitting &&
+                  allTestsRun
+                    ? "#000000"
+                    : "#f8f8f2",
                 border: "none",
                 padding: "10px 15px",
                 borderRadius: "4px",
@@ -989,7 +995,7 @@ public:
                 : !allTestsRun
                 ? "Run All Tests First"
                 : testResults.some((result) => result && !result.passed)
-                ? `❌ Wrong Answer (${
+                ? `❌ Wrong Answer - Submit Your Code (${
                     testResults.filter((result) => result && result.passed)
                       .length
                   }/${testResults.length} passed)`
