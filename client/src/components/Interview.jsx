@@ -25,6 +25,7 @@ const Interview = () => {
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [isListening, setIsListening] = useState(false);
   const [assessment, setAssessment] = useState(null);
+  const [isEnding, setIsEnding] = useState(false);
   const voiceMode = true;
   const [audioElement, setAudioElement] = useState(null);
   const [lastSpeechTime, setLastSpeechTime] = useState(null);
@@ -32,7 +33,6 @@ const Interview = () => {
   const [silenceCountdown, setSilenceCountdown] = useState(0);
   const [user, setUser] = useState(null);
   const [menuOpen, setMenuOpen] = useState(false);
-  const [isEnding, setIsEnding] = useState(false);
 
   // References
   const messagesEndRef = useRef(null);
@@ -79,12 +79,18 @@ const Interview = () => {
       isInterviewStarted &&
       !isListening &&
       !isSpeaking &&
+      !isEnding && // Don't start listening if interview is ending
       messages.length > 0
     ) {
       console.log("Auto-starting speech recognition after AI message");
       // Small delay to ensure the UI has updated and the AI has finished speaking
       const timer = setTimeout(() => {
-        if (!isSpeaking && recognitionRef.current && !isListening) {
+        if (
+          !isSpeaking &&
+          recognitionRef.current &&
+          !isListening &&
+          !isEnding
+        ) {
           console.log("Delayed auto-start of speech recognition");
           startListening();
         }
@@ -92,7 +98,7 @@ const Interview = () => {
 
       return () => clearTimeout(timer);
     }
-  }, [isInterviewStarted, isListening, isSpeaking, messages]);
+  }, [isInterviewStarted, isListening, isSpeaking, messages, isEnding]);
 
   // Add debounce tracking for speech recognition operations
   const [lastActionTime, setLastActionTime] = useState(0);
@@ -480,6 +486,26 @@ const Interview = () => {
     setIsLoading(true);
     setIsEnding(true); // Show the ending loader
 
+    // Force stop speech recognition to prevent cycling
+    if (recognitionRef.current) {
+      try {
+        recognitionRef.current.abort();
+        recognitionRef.current.stop();
+        setIsListening(false);
+      } catch (e) {
+        console.error("Error stopping recognition in endInterview:", e);
+      }
+    }
+
+    // Stop any speech synthesis
+    stopSpeech();
+
+    // Clear any timers
+    if (silenceTimerRef.current) {
+      clearTimeout(silenceTimerRef.current);
+      silenceTimerRef.current = null;
+    }
+
     try {
       const response = await axios.post(`${API_URL}/end_interview`, {
         session_id: sessionId,
@@ -487,8 +513,6 @@ const Interview = () => {
 
       if (response.data.success) {
         setAssessment(response.data.assessment);
-        stopSpeech();
-        stopListening();
 
         // Add a delay before redirecting to show the loader
         setTimeout(() => {
@@ -1235,6 +1259,52 @@ const Interview = () => {
     return null;
   };
 
+  // Modify our handleEndInterview function to properly work with existing endInterview function
+  const handleEndInterview = () => {
+    // Stop any ongoing speech
+    stopSpeech();
+
+    // Stop any ongoing speech recognition
+    stopListening();
+
+    // Clear any pending timers
+    if (silenceTimerRef.current) {
+      clearTimeout(silenceTimerRef.current);
+      silenceTimerRef.current = null;
+    }
+
+    // Call the existing endInterview function which handles confirmation
+    // and API calls to end the interview
+    endInterview();
+  };
+
+  // Add cleanup effect to ensure everything stops when component unmounts
+  useEffect(() => {
+    // Clean up function that runs when component unmounts
+    return () => {
+      console.log("Interview component unmounting - cleaning up all resources");
+
+      // Stop any speech recognition
+      if (recognitionRef.current) {
+        try {
+          recognitionRef.current.abort();
+          recognitionRef.current.stop();
+        } catch (e) {
+          // Ignore errors on cleanup
+        }
+      }
+
+      // Stop any ongoing speech
+      stopSpeech();
+
+      // Clear any timers
+      if (silenceTimerRef.current) {
+        clearTimeout(silenceTimerRef.current);
+        silenceTimerRef.current = null;
+      }
+    };
+  }, []);
+
   // Render the Interview interface
   return (
     <div className="bg-gradient-to-r from-black to-blue-900 text-white min-h-screen">
@@ -1379,10 +1449,11 @@ const Interview = () => {
                 AI Technical Interview Session
               </h2>
               <button
-                onClick={endInterview}
-                className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded transition"
+                onClick={handleEndInterview}
+                className="bg-red-600 hover:bg-red-700 text-white py-2 px-4 rounded-md flex items-center"
+                disabled={!isInterviewStarted || isLoading || isEnding}
               >
-                End Interview
+                {isEnding ? "Ending..." : "End Interview"}
               </button>
             </div>
 
