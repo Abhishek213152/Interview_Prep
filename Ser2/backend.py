@@ -7,19 +7,42 @@ import os
 import random
 import hashlib
 import time
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
 
 app = Flask(__name__)
 CORS(app)  # Enable Cross-Origin Requests
 
 # Configure Gemini API Key
-genai.configure(api_key="AIzaSyDt0zEqI4kJPvA_LFPTBef5ZfWI-QoU5LA")  # Replace with actual API key
+api_key = os.environ.get("GEMINI_API_KEY", "AIzaSyDt0zEqI4kJPvA_LFPTBef5ZfWI-QoU5LA")
+genai.configure(api_key=api_key)
 
-# Create a directory to store cached questions
-CACHE_DIR = "question_cache"
+# Check if running on Vercel (serverless environment)
+is_vercel = os.environ.get("VERCEL") == "1"
+
+# Set cache directory based on environment
+# Use /tmp directory if on Vercel (serverless)
+if is_vercel:
+    CACHE_DIR = "/tmp/question_cache"
+else:
+    CACHE_DIR = "question_cache"
+
 os.makedirs(CACHE_DIR, exist_ok=True)
 
 # File to store the history of served questions
 HISTORY_FILE = os.path.join(CACHE_DIR, "question_history.json")
+
+# Root endpoint for health check
+@app.route('/')
+def home():
+    return jsonify({
+        "status": "running",
+        "service": "AI Coding Questions API",
+        "version": "1.0.0",
+        "environment": "Vercel" if is_vercel else "Local"
+    })
 
 # Initialize question history
 def get_question_history():

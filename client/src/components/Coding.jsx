@@ -13,7 +13,8 @@ SyntaxHighlighter.registerLanguage("cpp", cpp);
 SyntaxHighlighter.registerLanguage("python", python);
 
 // API base URL - update this after Vercel deployment
-const API_URL = "http://127.0.0.1:5000";
+const API_URL =
+  "https://codingserverproject-30l4il85v-abhisheks-projects-b6b1354b.vercel.app";
 
 const Coding = () => {
   const [isAccepted, setIsAccepted] = useState(false);
