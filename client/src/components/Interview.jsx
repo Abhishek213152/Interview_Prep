@@ -42,7 +42,9 @@ const Interview = () => {
   const navigate = useNavigate();
 
   // API endpoint
-  const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5001";
+  const API_URL =
+    import.meta.env.VITE_API_URL ||
+    "https://interviewserverproject-ha4kpt6pl-abhisheks-projects-b6b1354b.vercel.app";
   console.log("Using API URL:", API_URL); // Add logging to verify API URL
 
   // Check for user authentication
@@ -1346,6 +1348,12 @@ const Interview = () => {
               <div className="absolute right-0 mt-2 w-40 bg-gray-800 text-white rounded-lg shadow-lg">
                 <button
                   className="block w-full text-left px-4 py-2 hover:bg-gray-700"
+                  onClick={() => navigate("/profile")}
+                >
+                  Profile
+                </button>
+                <button
+                  className="block w-full text-left px-4 py-2 hover:bg-gray-700 border-t border-gray-700"
                   onClick={handleLogout}
                 >
                   Logout

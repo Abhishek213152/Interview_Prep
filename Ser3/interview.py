@@ -10,12 +10,17 @@ import docx2txt
 import io
 import uuid
 from google.cloud import texttospeech
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
 
 app = Flask(__name__)
 CORS(app)  # Enable Cross-Origin Requests
 
 # Configure Gemini API Key
-genai.configure(api_key="AIzaSyDt0zEqI4kJPvA_LFPTBef5ZfWI-QoU5LA")  # Replace with actual API key
+api_key = os.environ.get("GEMINI_API_KEY", "AIzaSyDt0zEqI4kJPvA_LFPTBef5ZfWI-QoU5LA")
+genai.configure(api_key=api_key)
 
 # Initialize Text-to-Speech client
 tts_client = None
@@ -51,7 +56,7 @@ active_sessions = {}
 
 @app.route("/")
 def home():
-    return "Hello, World!"
+    return "Interview API is running!"
 
 # New function to generate audio stream instead of saving to file
 def generate_speech_stream(text):
