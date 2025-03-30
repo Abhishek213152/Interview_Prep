@@ -5,6 +5,7 @@ const multer = require("multer");
 const { v4: uuidv4 } = require("uuid");
 const path = require("path");
 const fs = require("fs");
+require("dotenv").config();
 
 // Initialize express app
 const app = express();
@@ -17,13 +18,10 @@ app.use(express.urlencoded({ extended: true, limit: "50mb" }));
 
 // MongoDB connection
 mongoose
-  .connect(
-    "mongodb+srv://jhaa213152:MANT6bTO0I5jsOlw@cluster0.ymojbhb.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0",
-    {
-      useNewUrlParser: true,
-      useUnifiedTopology: true,
-    }
-  )
+  .connect(process.env.MONGO_URI, {
+    useNewUrlParser: true,
+    useUnifiedTopology: true,
+  })
   .then(() => console.log("MongoDB connected"))
   .catch((err) => console.error("MongoDB connection error:", err));
 
@@ -65,6 +63,10 @@ const upload = multer({
       cb(new Error("Only image files are allowed"));
     }
   },
+});
+
+app.get("/", (req, res) => {
+  res.send("Hello from Vercel!");
 });
 
 // API Routes

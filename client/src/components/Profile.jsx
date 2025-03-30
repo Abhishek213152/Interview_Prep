@@ -210,7 +210,7 @@ const Profile = () => {
 
       // Send the image to your server API
       const response = await fetch(
-        "http://localhost:5000/api/upload-profile-image",
+        "https://mongodbinterviewprojectforimage-fee4qdmo8.vercel.app/api/upload-profile-image",
         {
           method: "POST",
           headers: {
@@ -243,7 +243,7 @@ const Profile = () => {
     try {
       // Delete the image from MongoDB via API
       const response = await fetch(
-        `http://localhost:5000/api/delete-profile-image/${user.profileImage}`,
+        `https://mongodbinterviewprojectforimage-fee4qdmo8.vercel.app/api/delete-profile-image/${user.profileImage}`,
         {
           method: "DELETE",
           headers: {
@@ -375,7 +375,7 @@ const Profile = () => {
     try {
       // Get the image data from your MongoDB server API
       const response = await fetch(
-        `http://localhost:5000/api/get-profile-image/${imageId}`
+        `https://mongodbinterviewprojectforimage-fee4qdmo8.vercel.app/api/get-profile-image/${imageId}`
       );
 
       if (!response.ok) {

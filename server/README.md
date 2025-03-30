@@ -36,7 +36,7 @@ npm start
 You can test if the server is running by visiting:
 
 ```
-http://localhost:5000/api/test
+https://mongodbinterviewprojectforimage-fee4qdmo8.vercel.app/api/test
 ```
 
 This should return:

@@ -25,7 +25,7 @@ const Home = () => {
     try {
       // Get the image data from your MongoDB server API
       const response = await fetch(
-        `http://localhost:5000/api/get-profile-image/${imageId}`
+        `https://mongodbinterviewprojectforimage-fee4qdmo8.vercel.app/api/get-profile-image/${imageId}`
       );
 
       if (!response.ok) {
