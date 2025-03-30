@@ -84,151 +84,226 @@ const Interview = () => {
       console.log("Auto-starting speech recognition after AI message");
       // Small delay to ensure the UI has updated and the AI has finished speaking
       const timer = setTimeout(() => {
-        if (!isSpeaking && recognitionRef.current) {
+        if (!isSpeaking && recognitionRef.current && !isListening) {
+          console.log("Delayed auto-start of speech recognition");
           startListening();
         }
-      }, 1000);
+      }, 2000); // Increased delay to 2 seconds
 
       return () => clearTimeout(timer);
     }
   }, [isInterviewStarted, isListening, isSpeaking, messages]);
 
+  // Add debounce tracking for speech recognition operations
+  const [lastActionTime, setLastActionTime] = useState(0);
+  const MIN_ACTION_INTERVAL = 1000; // Minimum time between speech recognition actions (ms)
+
+  const isActionAllowed = () => {
+    const now = Date.now();
+    if (now - lastActionTime < MIN_ACTION_INTERVAL) {
+      console.log("Action attempted too soon after previous action, skipping");
+      return false;
+    }
+    setLastActionTime(now);
+    return true;
+  };
+
   // Initialize speech recognition with silence detection
   useEffect(() => {
-    if ("SpeechRecognition" in window || "webkitSpeechRecognition" in window) {
-      const SpeechRecognition =
-        window.SpeechRecognition || window.webkitSpeechRecognition;
-      recognitionRef.current = new SpeechRecognition();
-      recognitionRef.current.continuous = false; // Use single recognition mode
-      recognitionRef.current.interimResults = true; // Get interim results for better UX
-      recognitionRef.current.lang = "en-US";
+    let recognition = null;
 
-      recognitionRef.current.onresult = (event) => {
-        // Get either final or interim result
-        const isFinal = event.results[event.results.length - 1].isFinal;
-        const transcript =
-          event.results[event.results.length - 1][0].transcript;
+    const setupSpeechRecognition = () => {
+      if (
+        !("SpeechRecognition" in window) &&
+        !("webkitSpeechRecognition" in window)
+      ) {
+        console.warn("Speech recognition not supported in this browser");
+        return;
+      }
 
-        // Always update the input field with the latest transcript
-        setUserInput(transcript);
+      try {
+        // Create a new recognition instance
+        const SpeechRecognition =
+          window.SpeechRecognition || window.webkitSpeechRecognition;
+        recognition = new SpeechRecognition();
+        recognition.continuous = false; // Use single recognition mode
+        recognition.interimResults = true; // Get interim results for better UX
+        recognition.lang = "en-US";
 
-        // Update last speech time whenever we get a result
-        setLastSpeechTime(Date.now());
+        // Handle speech results
+        recognition.onresult = (event) => {
+          try {
+            // Get either final or interim result
+            const isFinal = event.results[event.results.length - 1].isFinal;
+            const transcript =
+              event.results[event.results.length - 1][0].transcript;
 
-        // Clear any existing silence timer
-        if (silenceTimerRef.current) {
-          clearTimeout(silenceTimerRef.current);
-          silenceTimerRef.current = null;
-        }
+            // Update input field
+            setUserInput(transcript);
 
-        // Reset countdown
-        setSilenceCountdown(0);
+            // Update last speech time
+            setLastSpeechTime(Date.now());
 
-        // If we have text, start the silence detection countdown
-        if (transcript && transcript.trim()) {
-          // Start visual countdown from 100 to 0 over 4 seconds
-          let countdown = 100;
-          const countdownInterval = setInterval(() => {
-            countdown -= 2.5; // Decrease by 2.5 every 100ms (40 steps for 4 seconds)
-            if (countdown <= 0) {
-              clearInterval(countdownInterval);
-              countdown = 0;
+            // Clear any existing silence timer
+            if (silenceTimerRef.current) {
+              clearTimeout(silenceTimerRef.current);
+              silenceTimerRef.current = null;
             }
-            setSilenceCountdown(countdown);
-          }, 100);
 
-          // Set the silence timer to send the message after 4 seconds
-          silenceTimerRef.current = setTimeout(() => {
-            clearInterval(countdownInterval);
+            // Reset countdown
             setSilenceCountdown(0);
-            console.log("Silence detected for 4 seconds");
-            if (transcript && transcript.trim() && isListening) {
-              console.log("Auto-sending message after silence");
-              sendResponse(transcript.trim());
-            }
-          }, 4000);
-        }
 
-        if (isFinal) {
-          console.log("Final speech recognized:", transcript);
-          // For final results, clear the countdown and send immediately
-          if (silenceTimerRef.current) {
-            clearTimeout(silenceTimerRef.current);
-            silenceTimerRef.current = null;
-          }
-          setSilenceCountdown(0);
-
-          // Auto-send after final speech recognition
-          setTimeout(() => {
+            // If we have text, start silence detection countdown
             if (transcript && transcript.trim()) {
-              console.log("Auto-sending message after speech completed");
-              sendResponse(transcript.trim());
+              // Start visual countdown from 100 to 0 over 4 seconds
+              let countdown = 100;
+              const countdownInterval = setInterval(() => {
+                countdown -= 2.5; // Decrease by 2.5 every 100ms (40 steps for 4 seconds)
+                if (countdown <= 0) {
+                  clearInterval(countdownInterval);
+                  countdown = 0;
+                }
+                setSilenceCountdown(countdown);
+              }, 100);
+
+              // Set silence timer to send message after 4 seconds
+              silenceTimerRef.current = setTimeout(() => {
+                clearInterval(countdownInterval);
+                setSilenceCountdown(0);
+                console.log("Silence detected for 4 seconds");
+                if (transcript && transcript.trim() && isListening) {
+                  console.log("Auto-sending message after silence");
+                  sendResponse(transcript.trim());
+                }
+              }, 4000);
             }
-          }, 300);
-        }
-      };
 
-      recognitionRef.current.onstart = () => {
-        console.log("Recognition started");
-        setIsListening(true);
-      };
+            // Handle final results
+            if (isFinal) {
+              console.log("Final speech recognized:", transcript);
 
-      recognitionRef.current.onend = () => {
-        console.log("Recognition ended - restarting");
-        setIsListening(false);
+              // Clear the countdown
+              if (silenceTimerRef.current) {
+                clearTimeout(silenceTimerRef.current);
+                silenceTimerRef.current = null;
+              }
+              setSilenceCountdown(0);
 
-        // Restart speech recognition if interview is ongoing and not speaking
-        if (isInterviewStarted && !isSpeaking) {
-          setTimeout(() => {
-            try {
-              recognitionRef.current.start();
-              console.log("Auto-restarted speech recognition");
-            } catch (e) {
-              console.error("Failed to restart speech recognition:", e);
+              // Auto-send after final recognition with small delay
+              setTimeout(() => {
+                if (transcript && transcript.trim()) {
+                  console.log("Auto-sending message after speech completed");
+                  sendResponse(transcript.trim());
+                }
+              }, 300);
             }
-          }, 300);
-        }
-      };
+          } catch (e) {
+            console.error("Error in speech recognition onresult:", e);
+          }
+        };
 
-      recognitionRef.current.onerror = (event) => {
-        console.error("Speech recognition error:", event.error);
-        setIsListening(false);
+        // Handle recognition start
+        recognition.onstart = () => {
+          console.log("Recognition started");
+          setIsListening(true);
+        };
 
-        // Restart after error (except aborted)
-        if (event.error !== "aborted" && isInterviewStarted && !isSpeaking) {
-          setTimeout(() => {
-            try {
-              recognitionRef.current.start();
-              console.log("Restarted speech recognition after error");
-            } catch (e) {
-              console.error(
-                "Failed to restart speech recognition after error:",
-                e
-              );
-            }
-          }, 300);
-        }
-      };
-    }
+        // Handle recognition end
+        recognition.onend = () => {
+          console.log("Recognition ended");
+          setIsListening(false);
 
+          // Only auto-restart if interview is active and AI isn't speaking
+          if (isInterviewStarted && !isSpeaking) {
+            setTimeout(() => {
+              if (!isSpeaking && isInterviewStarted) {
+                try {
+                  recognition.start();
+                  console.log("Auto-restarted speech recognition");
+                } catch (e) {
+                  if (e.message && e.message.includes("already started")) {
+                    console.log("Recognition already started, not restarting");
+                  } else {
+                    console.error("Failed to restart speech recognition:", e);
+                  }
+                }
+              }
+            }, 500);
+          }
+        };
+
+        // Handle recognition errors
+        recognition.onerror = (event) => {
+          console.error("Speech recognition error:", event.error);
+          setIsListening(false);
+
+          // No need to restart after aborted (we triggered that)
+          if (event.error === "aborted") {
+            console.log("Recognition aborted, not auto-restarting");
+            return;
+          }
+
+          // Only auto-restart for other errors if interview is active and AI isn't speaking
+          if (isInterviewStarted && !isSpeaking) {
+            setTimeout(() => {
+              if (!isSpeaking && isInterviewStarted) {
+                try {
+                  recognition.start();
+                  console.log("Restarted speech recognition after error");
+                } catch (e) {
+                  if (e.message && e.message.includes("already started")) {
+                    console.log(
+                      "Recognition already started after error, not restarting"
+                    );
+                  } else {
+                    console.error(
+                      "Failed to restart speech recognition after error:",
+                      e
+                    );
+                    // Try recreating the recognition object if all else fails
+                    setupSpeechRecognition();
+                  }
+                }
+              }
+            }, 500);
+          }
+        };
+
+        // Store the recognition instance in the ref
+        recognitionRef.current = recognition;
+        console.log("Speech recognition initialized successfully");
+      } catch (e) {
+        console.error("Error setting up speech recognition:", e);
+      }
+    };
+
+    // Set up recognition initially
+    setupSpeechRecognition();
+
+    // Clean up on component unmount
     return () => {
       // Clean up silence timer
       if (silenceTimerRef.current) {
         clearTimeout(silenceTimerRef.current);
         silenceTimerRef.current = null;
       }
-      setSilenceCountdown(0);
 
+      // Stop any ongoing recognition
       if (recognitionRef.current) {
         try {
+          recognitionRef.current.abort();
           recognitionRef.current.stop();
-        } catch (e) {}
+        } catch (e) {
+          // Ignore errors on cleanup
+        }
       }
-      if (speechSynthesisRef.current) {
+
+      // Cancel any speech synthesis
+      if (window.speechSynthesis) {
         window.speechSynthesis.cancel();
       }
     };
-  }, [isInterviewStarted, isSpeaking]);
+  }, [isInterviewStarted, isSpeaking]); // Only re-run if these change
 
   // Scroll to bottom of messages
   useEffect(() => {
@@ -279,44 +354,27 @@ const Interview = () => {
   // Start interview
   const startInterview = async (e) => {
     e.preventDefault();
-    if (!name) {
-      alert("Please enter your name");
-      return;
-    }
-
-    // Check if browser supports speech recognition
-    if (
-      !("SpeechRecognition" in window || "webkitSpeechRecognition" in window)
-    ) {
-      alert(
-        "Your browser doesn't support speech recognition. Please use Chrome, Edge or Safari."
-      );
-      return;
-    }
-
     setIsLoading(true);
 
+    // Validate name input
+    if (!name.trim()) {
+      alert("Please enter your name");
+      setIsLoading(false);
+      return;
+    }
+
     try {
+      console.log("Starting interview...");
+
+      // Create form data with resume file
       const formData = new FormData();
       formData.append("name", name);
-      formData.append("voice_mode", "true");
-
-      // Handle resume file upload
+      formData.append("voice_mode", voiceMode);
       if (resumeFile) {
-        console.log("Adding resume file to form data:", resumeFile.name);
-        // Use a specific filename rather than the original one
-        formData.append(
-          "resume",
-          resumeFile,
-          "candidate_resume" +
-            resumeFile.name.substring(resumeFile.name.lastIndexOf("."))
-        );
+        formData.append("resume", resumeFile);
       }
 
-      console.log("Sending request to:", `${API_URL}/start_interview`);
-      console.log("Form data name:", name);
-      console.log("Voice mode:", voiceMode);
-
+      // Send request to start interview
       const response = await axios.post(
         `${API_URL}/start_interview`,
         formData,
@@ -324,52 +382,29 @@ const Interview = () => {
           headers: {
             "Content-Type": "multipart/form-data",
           },
-          // Add timeout
-          timeout: 60000, // 60 second timeout (increased for voice processing)
         }
       );
 
       if (response.data.success) {
         setSessionId(response.data.session_id);
-        setMessages([
-          {
-            role: "assistant",
-            content: response.data.message,
-          },
-        ]);
         setIsInterviewStarted(true);
 
-        // If voice mode is enabled and audio URL is provided
-        if (voiceMode && response.data.audio_url) {
-          playServerAudio(response.data.audio_url);
-        } else {
-          // Fallback to browser TTS
-          speakText(response.data.message);
+        // Add initial message
+        setMessages([{ role: "assistant", content: response.data.message }]);
+
+        // Play audio if available
+        if (voiceMode && response.data.text_for_audio) {
+          // Use the new streaming endpoint
+          streamAudio(response.data.text_for_audio);
         }
       } else {
-        alert("Failed to start interview");
+        console.error("Error:", response.data.error);
+        alert("Error starting interview: " + response.data.error);
       }
     } catch (error) {
       console.error("Error starting interview:", error);
-
-      // Detailed error logging
-      if (error.response) {
-        // The request was made and the server responded with a status code outside the 2xx range
-        console.error("Response status:", error.response.status);
-        console.error("Response data:", error.response.data);
-        console.error("Response headers:", error.response.headers);
-      } else if (error.request) {
-        // The request was made but no response was received
-        console.error("No response received:", error.request);
-      } else {
-        // Something happened in setting up the request
-        console.error("Error message:", error.message);
-      }
-
       alert(
-        `Error starting interview: ${
-          error.message || "Unknown error"
-        }. Please check console for details.`
+        "Error starting interview. Please check your connection and try again."
       );
     } finally {
       setIsLoading(false);
@@ -378,52 +413,56 @@ const Interview = () => {
 
   // Send response function (modify to accept an optional parameter)
   const sendResponse = async (manualInput = "") => {
-    // Use either the provided input or the current userInput state
-    const messageToSend = manualInput || userInput.trim();
-
-    if (!messageToSend || !sessionId) return;
-
-    setUserInput(""); // Clear input field
-
-    // Add user message to chat
-    setMessages((prev) => [
-      ...prev,
-      {
-        role: "user",
-        content: messageToSend,
-      },
-    ]);
-
-    setIsLoading(true);
-
     try {
+      // Use provided input or state
+      const inputText = manualInput || userInput;
+      if (!inputText.trim()) return;
+
+      // Stop any ongoing playback
+      if (recognitionRef.current) {
+        stopListening();
+      }
+
+      // Clear any silence timer
+      if (silenceTimerRef.current) {
+        clearTimeout(silenceTimerRef.current);
+        silenceTimerRef.current = null;
+      }
+      setSilenceCountdown(0);
+
+      // Update UI state
+      setIsLoading(true);
+      setUserInput("");
+
+      // Add user message to UI
+      setMessages((prevMessages) => [
+        ...prevMessages,
+        { role: "user", content: inputText },
+      ]);
+
+      // Send to server
       const response = await axios.post(`${API_URL}/interview_response`, {
         session_id: sessionId,
-        message: messageToSend,
+        message: inputText,
       });
 
       if (response.data.success) {
-        setMessages((prev) => [
-          ...prev,
-          {
-            role: "assistant",
-            content: response.data.message,
-          },
+        // Add AI message to UI
+        setMessages((prevMessages) => [
+          ...prevMessages,
+          { role: "assistant", content: response.data.message },
         ]);
 
-        // If voice mode is enabled and audio URL is provided
-        if (voiceMode && response.data.audio_url) {
-          playServerAudio(response.data.audio_url);
-        } else {
-          // Fallback to browser TTS
-          speakText(response.data.message);
+        // Play audio if available in voice mode
+        if (voiceMode && response.data.text_for_audio) {
+          // Use the new streaming endpoint
+          streamAudio(response.data.text_for_audio);
         }
       } else {
-        alert("Failed to process response");
+        console.error("Response error:", response.data.error);
       }
     } catch (error) {
-      console.error("Error sending response:", error);
-      alert("Error processing your response. Please try again.");
+      console.error("Error sending message:", error);
     } finally {
       setIsLoading(false);
     }
@@ -623,94 +662,338 @@ const Interview = () => {
     }, 800); // Longer initial delay for more reliable audio playback
   };
 
-  // Text-to-speech functionality (browser-based fallback)
-  const speakText = (text) => {
-    if ("speechSynthesis" in window) {
-      // Stop any ongoing speech
-      stopSpeech();
+  // New function to stream audio directly from the server
+  const streamAudio = async (text) => {
+    // First, stop any ongoing speech
+    stopSpeech();
 
-      // Force stop listening before speaking
-      if (recognitionRef.current) {
-        console.log("Ensuring microphone is completely off before browser TTS");
-        stopListening();
+    // Force stop listening before playing audio
+    if (recognitionRef.current) {
+      console.log("Stopping microphone before playing audio");
+      stopListening();
+    }
+
+    // Set speaking state immediately to prevent other operations
+    setIsSpeaking(true);
+
+    // Wait a moment to ensure recognition is fully stopped
+    await new Promise((resolve) => setTimeout(resolve, 300));
+
+    console.log("Streaming audio for text:", text?.substring(0, 50) + "...");
+
+    try {
+      // Create a unique timestamp for cache-busting
+      const timestamp = new Date().getTime();
+
+      console.log("Making request to stream_audio endpoint");
+      // Request audio stream from server
+      const response = await axios.post(
+        `${API_URL}/stream_audio?t=${timestamp}`,
+        { text },
+        {
+          responseType: "blob",
+          timeout: 30000, // 30 second timeout for audio generation
+          headers: {
+            "Cache-Control": "no-cache",
+            Pragma: "no-cache",
+          },
+        }
+      );
+      console.log("Received response from stream_audio endpoint");
+
+      // Check if we got a JSON response (use_browser_tts flag)
+      const contentType = response.headers["content-type"];
+      if (contentType && contentType.includes("application/json")) {
+        console.log(
+          "Received JSON response instead of audio, using browser TTS"
+        );
+        // Convert blob to JSON
+        const reader = new FileReader();
+
+        // Use a promise to handle the async file reading
+        const jsonData = await new Promise((resolve, reject) => {
+          reader.onload = () => resolve(reader.result);
+          reader.onerror = () =>
+            reject(new Error("Failed to read blob as text"));
+          reader.readAsText(response.data);
+        });
+
+        try {
+          const jsonResponse = JSON.parse(jsonData);
+          if (jsonResponse.use_browser_tts) {
+            console.log("Server requested browser TTS fallback");
+            setIsSpeaking(false);
+            speakText(jsonResponse.text || text);
+          }
+        } catch (e) {
+          console.error("Error parsing JSON response:", e);
+          setIsSpeaking(false);
+          speakText(text);
+        }
+        return;
       }
 
-      // Create new utterance
-      const utterance = new SpeechSynthesisUtterance(text);
-      utterance.rate = 0.9; // Slightly slower for better clarity
-      utterance.pitch = 1.0;
-      utterance.volume = 1.0;
+      // Create a blob URL from the response
+      const audioBlob = new Blob([response.data], { type: "audio/mpeg" });
+      const blobSize = audioBlob.size;
+      console.log(`Received audio blob of size: ${blobSize} bytes`);
 
-      // Get voices
-      let voices = window.speechSynthesis.getVoices();
-      if (voices.length === 0) {
-        // If voices aren't loaded yet, wait for them
-        window.speechSynthesis.onvoiceschanged = () => {
-          voices = window.speechSynthesis.getVoices();
-          setVoice(voices);
-        };
-      } else {
-        setVoice(voices);
+      // If blob is too small, it might be an error or empty response
+      if (blobSize < 1000) {
+        console.warn(
+          "Audio blob too small, might be invalid. Falling back to browser TTS"
+        );
+        setIsSpeaking(false);
+        speakText(text);
+        return;
       }
 
-      function setVoice(voiceList) {
-        // Just use any available voice
-        const preferredVoice = voiceList[0];
+      const audioUrl = URL.createObjectURL(audioBlob);
 
-        if (preferredVoice) {
-          console.log("Using voice:", preferredVoice.name, preferredVoice.lang);
-          utterance.voice = preferredVoice;
+      // Create a new audio element each time to avoid issues with reuse
+      const audio = new Audio();
+      setAudioElement(audio);
+
+      // Set up event listeners
+      audio.onloadstart = () => console.log("Audio loading started");
+      audio.onloadeddata = () => console.log("Audio data loaded");
+      audio.oncanplay = () => console.log("Audio can now play");
+
+      audio.onplay = () => {
+        console.log("Audio started playing");
+        setIsSpeaking(true);
+        // Double-check microphone is definitely off when audio plays
+        if (recognitionRef.current && isListening) {
+          stopListening();
+        }
+      };
+
+      audio.onended = () => {
+        console.log("Audio playback completed");
+        setIsSpeaking(false);
+        // Revoke blob URL to avoid memory leaks
+        URL.revokeObjectURL(audioUrl);
+        // The useEffect will handle restarting the microphone after a delay
+      };
+
+      // Update error handling
+      audio.onerror = (e) => {
+        console.error("Audio error:", e);
+        console.error(
+          "Audio error code:",
+          audio.error ? audio.error.code : "unknown"
+        );
+        console.error(
+          "Audio error message:",
+          audio.error ? audio.error.message : "unknown"
+        );
+        setIsSpeaking(false);
+        URL.revokeObjectURL(audioUrl);
+
+        // Fall back to browser TTS
+        console.log("Falling back to browser TTS due to audio error");
+        speakText(text);
+      };
+
+      // Set source and pre-load
+      audio.src = audioUrl;
+      audio.load();
+
+      console.log("Audio setup complete, attempting to play...");
+
+      // Longer delay before play to ensure proper loading
+      setTimeout(() => {
+        if (isListening) {
+          stopListening();
         }
 
-        // Set events
-        utterance.onstart = () => {
-          console.log("Browser TTS started");
-          setIsSpeaking(true);
-          // Double-check microphone is definitely off when TTS starts
-          if (recognitionRef.current) {
-            stopListening();
+        try {
+          // Use play() with promise handling
+          const playPromise = audio.play();
+
+          if (playPromise !== undefined) {
+            playPromise
+              .then(() => {
+                console.log("Audio playing successfully");
+              })
+              .catch((error) => {
+                console.error("Failed to play audio:", error);
+                setIsSpeaking(false);
+                URL.revokeObjectURL(audioUrl);
+
+                // Fall back to browser TTS
+                console.log("Falling back to browser TTS after play failure");
+                speakText(text);
+              });
           }
-
-          // Set a periodic check to ensure mic stays off during speech
-          const checkInterval = setInterval(() => {
-            if (isListening && recognitionRef.current) {
-              console.log(
-                "Detected microphone activated during speech - stopping it"
-              );
-              stopListening();
-            }
-          }, 500);
-
-          // Store the interval ID for cleanup
-          utterance.checkIntervalId = checkInterval;
-        };
-
-        utterance.onend = () => {
-          console.log("Browser TTS ended");
-          // Clear the interval check
-          if (utterance.checkIntervalId) {
-            clearInterval(utterance.checkIntervalId);
-          }
-
+        } catch (playError) {
+          console.error("Error during play() call:", playError);
           setIsSpeaking(false);
-          // The useEffect will handle restarting the microphone after delay
-        };
+          URL.revokeObjectURL(audioUrl);
+          speakText(text);
+        }
+      }, 1000);
+    } catch (error) {
+      console.error("Error streaming audio:", error);
+      setIsSpeaking(false);
 
-        utterance.onerror = (e) => {
-          console.error("Browser TTS error:", e);
-          // Clear the interval check
-          if (utterance.checkIntervalId) {
-            clearInterval(utterance.checkIntervalId);
-          }
+      // Fall back to browser TTS
+      console.log("Falling back to browser TTS due to streaming error");
+      speakText(text);
+    }
+  };
 
-          setIsSpeaking(false);
-        };
+  // Text-to-speech functionality (browser-based fallback)
+  const speakText = (text) => {
+    if (!text || typeof text !== "string") {
+      console.error("Invalid text provided to speakText:", text);
+      setIsSpeaking(false);
+      return;
+    }
 
-        // Store reference and speak
-        speechSynthesisRef.current = utterance;
-        window.speechSynthesis.speak(utterance);
+    console.log(
+      "Using browser TTS fallback for:",
+      text.substring(0, 50) + "..."
+    );
+
+    // Force set speaking state
+    setIsSpeaking(true);
+
+    // Force stop listening
+    if (recognitionRef.current && isListening) {
+      stopListening();
+    }
+
+    // Make sure any existing speech is cancelled
+    if ("speechSynthesis" in window) {
+      try {
+        window.speechSynthesis.cancel();
+      } catch (e) {
+        console.error("Error cancelling speech synthesis:", e);
       }
     }
+
+    // Give a moment for cancellation to take effect
+    setTimeout(() => {
+      if ("speechSynthesis" in window) {
+        try {
+          // Preprocess text to make it easier to speak
+          text = text.replace(/\n/g, " ").trim();
+          if (text.length > 1000) {
+            text = text.substring(0, 1000) + "...";
+            console.log("Text truncated for speech synthesis");
+          }
+
+          console.log("Creating utterance for browser TTS");
+
+          // Create new utterance
+          const utterance = new SpeechSynthesisUtterance(text);
+          utterance.rate = 0.9; // Slightly slower for better clarity
+          utterance.pitch = 1.0;
+          utterance.volume = 1.0;
+
+          // Set events
+          utterance.onstart = () => {
+            console.log("Browser TTS started");
+            setIsSpeaking(true);
+            // Double-check microphone is definitely off when TTS starts
+            if (recognitionRef.current && isListening) {
+              stopListening();
+            }
+          };
+
+          utterance.onend = () => {
+            console.log("Browser TTS ended");
+            setIsSpeaking(false);
+            // The useEffect will handle restarting the microphone after delay
+          };
+
+          utterance.onerror = (e) => {
+            console.error("Browser TTS error:", e);
+            setIsSpeaking(false);
+          };
+
+          // Store reference
+          speechSynthesisRef.current = utterance;
+
+          // Get voices (this might be async)
+          let voices = window.speechSynthesis.getVoices();
+
+          const selectVoiceAndSpeak = (voiceList) => {
+            try {
+              // Find a good English voice
+              let selectedVoice = null;
+
+              // First try to find a native English voice
+              for (const voice of voiceList) {
+                if (
+                  (voice.lang === "en-US" || voice.lang === "en-GB") &&
+                  !voice.localService
+                ) {
+                  selectedVoice = voice;
+                  break;
+                }
+              }
+
+              // If no remote voice found, try any English voice
+              if (!selectedVoice) {
+                for (const voice of voiceList) {
+                  if (voice.lang.startsWith("en")) {
+                    selectedVoice = voice;
+                    break;
+                  }
+                }
+              }
+
+              // If still no voice, use the first available voice
+              if (!selectedVoice && voiceList.length > 0) {
+                selectedVoice = voiceList[0];
+              }
+
+              if (selectedVoice) {
+                console.log(
+                  "Using voice:",
+                  selectedVoice.name,
+                  selectedVoice.lang
+                );
+                utterance.voice = selectedVoice;
+              } else {
+                console.warn("No voices available for speech synthesis");
+              }
+
+              // Double check recognition is stopped
+              if (recognitionRef.current && isListening) {
+                stopListening();
+              }
+
+              // Speak
+              console.log("Calling browser TTS speak()");
+              window.speechSynthesis.speak(utterance);
+            } catch (e) {
+              console.error("Error in selectVoiceAndSpeak:", e);
+              setIsSpeaking(false);
+            }
+          };
+
+          if (voices.length === 0) {
+            // If voices aren't loaded yet, wait for them
+            window.speechSynthesis.onvoiceschanged = () => {
+              voices = window.speechSynthesis.getVoices();
+              selectVoiceAndSpeak(voices);
+            };
+          } else {
+            // Voices are available, select and speak
+            selectVoiceAndSpeak(voices);
+          }
+        } catch (e) {
+          console.error("Error setting up browser TTS:", e);
+          setIsSpeaking(false);
+        }
+      } else {
+        console.error("Browser does not support speech synthesis");
+        setIsSpeaking(false);
+      }
+    }, 300);
   };
 
   const stopSpeech = () => {
@@ -739,141 +1022,169 @@ const Interview = () => {
     setIsSpeaking(false);
   };
 
-  // Enhanced speech functions with silence timer cleanup
-  const startListening = () => {
+  const stopListening = () => {
     if (!recognitionRef.current) return;
 
-    // Don't start if AI is speaking
-    if (isSpeaking) {
-      console.log("Cannot start listening while AI is speaking");
-      return;
-    }
-
-    // Clear the input when starting to listen
-    setUserInput("");
-
-    // Reset silence detection
-    setLastSpeechTime(null);
-    setSilenceCountdown(0);
-    if (silenceTimerRef.current) {
-      clearTimeout(silenceTimerRef.current);
-      silenceTimerRef.current = null;
-    }
+    // Prevent rapid stop calls
+    if (!isActionAllowed()) return;
 
     try {
-      console.log("Starting speech recognition");
-      recognitionRef.current.start();
-      console.log("Successfully started speech recognition");
-    } catch (e) {
-      console.error("Error starting speech recognition:", e);
-      // If already started, stop and restart
-      if (e.message && e.message.includes("already started")) {
-        try {
-          recognitionRef.current.stop();
-          console.log("Stopped already-running recognition");
+      console.log("Stopping speech recognition");
 
-          setTimeout(() => {
-            try {
-              recognitionRef.current.start();
-              console.log("Restarted recognition after stopping");
-            } catch (innerError) {
-              console.error("Failed to restart recognition:", innerError);
-            }
-          }, 300);
-        } catch (stopError) {
-          console.error(
-            "Error stopping already-running recognition:",
-            stopError
-          );
-        }
-      }
-    }
-  };
-
-  const stopListening = () => {
-    console.log("STOPPING SPEECH RECOGNITION");
-
-    // Clear silence timer when stopping listening
-    if (silenceTimerRef.current) {
-      clearTimeout(silenceTimerRef.current);
-      silenceTimerRef.current = null;
-    }
-
-    // Set isListening to false immediately for immediate UI feedback
-    setIsListening(false);
-
-    if (!recognitionRef.current) {
-      console.log("No recognition instance to stop");
-      return;
-    }
-
-    try {
-      // First attempt to abort
+      // First try to abort (more reliable way to stop)
       try {
         recognitionRef.current.abort();
-        console.log("Successfully aborted speech recognition");
-      } catch (abortError) {
-        console.log("Abort not available or failed:", abortError);
+      } catch (e) {
+        console.log("Abort failed:", e);
       }
 
       // Then try to stop
       try {
         recognitionRef.current.stop();
-        console.log("Successfully stopped speech recognition");
-      } catch (stopError) {
-        console.error("Error stopping speech recognition:", stopError);
+      } catch (e) {
+        console.log("Stop failed:", e);
       }
 
-      // If still having issues, try recreating the recognition object
-      if (isListening) {
-        console.log(
-          "Recognition still active after stop attempts, recreating object"
-        );
-        try {
-          const SpeechRecognition =
-            window.SpeechRecognition || window.webkitSpeechRecognition;
-          recognitionRef.current = new SpeechRecognition();
-          recognitionRef.current.continuous = false;
-          recognitionRef.current.interimResults = true;
-          recognitionRef.current.lang = "en-US";
-
-          // Reinitialize basic event handlers
-          recognitionRef.current.onstart = () => setIsListening(true);
-          recognitionRef.current.onend = () => setIsListening(false);
-
-          console.log("Successfully recreated speech recognition object");
-        } catch (e) {
-          console.error("Failed to recreate speech recognition:", e);
-        }
-      }
+      // Force state update
+      setIsListening(false);
     } catch (e) {
-      console.error("Multiple errors stopping speech recognition:", e);
+      console.error("Error stopping speech recognition:", e);
+      setIsListening(false);
     }
-
-    // Final check
-    setTimeout(() => {
-      if (isListening) {
-        console.log(
-          "WARNING: isListening still true after stopping - forcing to false"
-        );
-        setIsListening(false);
-      }
-    }, 100);
   };
 
-  // Speech recognition toggle - update to automatically restart listening
+  const startListening = () => {
+    if (!recognitionRef.current) return;
+
+    // Don't try to start if already listening
+    if (isListening) {
+      console.log("Already listening, not starting again");
+      return;
+    }
+
+    // Don't start if AI is speaking
+    if (isSpeaking) {
+      console.log("AI is speaking, not starting microphone");
+      return;
+    }
+
+    // Prevent rapid start calls
+    if (!isActionAllowed()) return;
+
+    // Make sure it's stopped first
+    stopListening();
+
+    // Longer delay to ensure it's fully stopped
+    setTimeout(() => {
+      try {
+        console.log("Starting speech recognition");
+        recognitionRef.current.start();
+        console.log("Successfully started speech recognition");
+      } catch (e) {
+        console.error("Error starting speech recognition:", e);
+        // If we got "already started" error, need to recreate the object
+        if (e.message && e.message.includes("already started")) {
+          console.log("Recognition already started, recreating object");
+          recreateSpeechRecognition();
+        } else {
+          setIsListening(false);
+        }
+      }
+    }, 500);
+  };
+
+  // Extract the recreation logic to a separate function
+  const recreateSpeechRecognition = () => {
+    try {
+      // Recreate recognition object
+      const SpeechRecognition =
+        window.SpeechRecognition || window.webkitSpeechRecognition;
+      recognitionRef.current = new SpeechRecognition();
+      recognitionRef.current.continuous = false;
+      recognitionRef.current.interimResults = true;
+      recognitionRef.current.lang = "en-US";
+
+      // Re-add event handlers
+      recognitionRef.current.onresult = (event) => {
+        const isFinal = event.results[event.results.length - 1].isFinal;
+        const transcript =
+          event.results[event.results.length - 1][0].transcript;
+        setUserInput(transcript);
+      };
+
+      recognitionRef.current.onstart = () => {
+        console.log("Recognition started");
+        setIsListening(true);
+      };
+
+      recognitionRef.current.onend = () => {
+        console.log("Recognition ended");
+        setIsListening(false);
+      };
+
+      recognitionRef.current.onerror = (event) => {
+        console.error("Speech recognition error:", event.error);
+        setIsListening(false);
+      };
+
+      console.log("Speech recognition object recreated");
+
+      // Try starting again after a longer delay
+      setTimeout(() => {
+        try {
+          if (!isSpeaking) {
+            recognitionRef.current.start();
+            console.log("Started recognition with new object");
+          } else {
+            console.log(
+              "Not starting new recognition object because AI is speaking"
+            );
+          }
+        } catch (err) {
+          console.error("Failed to start recognition with new object:", err);
+          setIsListening(false);
+        }
+      }, 1000);
+    } catch (recreateError) {
+      console.error("Failed to recreate recognition object:", recreateError);
+      setIsListening(false);
+    }
+  };
+
+  // Fixed toggle listening function
   const toggleListening = () => {
     if (!recognitionRef.current) {
       alert("Speech recognition is not supported in your browser");
       return;
     }
 
+    if (isSpeaking) {
+      console.log("Cannot toggle microphone while AI is speaking");
+      return;
+    }
+
+    console.log("Toggle listening called, current state:", isListening);
+
     if (isListening) {
       console.log("Toggling speech recognition OFF");
       stopListening();
+
+      // Clear any silenceTimer
+      if (silenceTimerRef.current) {
+        clearTimeout(silenceTimerRef.current);
+        silenceTimerRef.current = null;
+      }
+      setSilenceCountdown(0);
     } else {
       console.log("Toggling speech recognition ON");
-      startListening();
+
+      // Clear input when starting fresh
+      setUserInput("");
+
+      // Start listening with a delay to ensure any previous instances are stopped
+      setTimeout(() => {
+        startListening();
+      }, 300);
     }
   };
 

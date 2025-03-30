@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify, send_file
+from flask import Flask, request, jsonify, send_file, Response
 from flask_cors import CORS
 import google.generativeai as genai
 import os
@@ -46,15 +46,175 @@ except Exception as local_e:
     if not using_cloud_tts:
         print("No TTS systems available - voice functionality will not work")
 
-# Create directory for interview sessions and audio files
-SESSIONS_DIR = "interview_sessions"
-AUDIO_DIR = "audio_files"
-os.makedirs(SESSIONS_DIR, exist_ok=True)
-os.makedirs(AUDIO_DIR, exist_ok=True)
+# In-memory storage for interview sessions
+active_sessions = {}
 
 @app.route("/")
 def home():
     return "Hello, World!"
+
+# New function to generate audio stream instead of saving to file
+def generate_speech_stream(text):
+    """Generate speech audio from text and return as a byte stream"""
+    if not text or not text.strip():
+        print("Empty text provided for speech generation")
+        return None
+        
+    # Preprocess text to make it easier to speak
+    text = text.replace('\n', ' ').strip()
+    text = text.replace('  ', ' ')  # Remove double spaces
+    if len(text) > 3000:  # Limit very long text
+        text = text[:3000] + "..."
+        print(f"Text truncated to {len(text)} characters for speech generation")
+    
+    print(f"Generating speech for text: {text[:50]}...")
+    
+    # Try Google Cloud TTS first if available
+    if using_cloud_tts and tts_client:
+        try:
+            print("Using Google Cloud TTS for speech generation")
+            # Set the text input to be synthesized
+            synthesis_input = texttospeech.SynthesisInput(text=text)
+            
+            # Build the voice request - try with a specific voice
+            voice = texttospeech.VoiceSelectionParams(
+                language_code="en-US",
+                name="en-US-Standard-D",  # Specific voice name
+                ssml_gender=texttospeech.SsmlVoiceGender.MALE
+            )
+            
+            # Select the type of audio file returned
+            audio_config = texttospeech.AudioConfig(
+                audio_encoding=texttospeech.AudioEncoding.MP3,
+                speaking_rate=0.9,  # Slightly slower for better clarity
+                pitch=0.0,          # Normal pitch
+                volume_gain_db=0.0  # Normal volume
+            )
+            
+            # Perform the text-to-speech request
+            response = tts_client.synthesize_speech(
+                input=synthesis_input, 
+                voice=voice,
+                audio_config=audio_config
+            )
+            
+            if response and response.audio_content and len(response.audio_content) > 1000:
+                print(f"Successfully generated speech with Google Cloud TTS ({len(response.audio_content)} bytes)")
+                return response.audio_content
+            else:
+                print("Google Cloud TTS returned empty or too small audio content")
+        except Exception as cloud_error:
+            print(f"Cloud TTS error: {cloud_error}")
+            # Fall back to local TTS
+    
+    # Use local TTS if available
+    if local_tts:
+        try:
+            print("Using local TTS for speech generation")
+            # Create a bytes IO object
+            audio_bytes = io.BytesIO()
+            
+            # Configure speed
+            local_tts.setProperty('rate', 150)  # Normal speaking rate
+            
+            # Try to set a good voice
+            voices = local_tts.getProperty('voices')
+            voice_set = False
+            
+            # First try to find a male voice
+            for voice in voices:
+                if 'male' in voice.name.lower():
+                    print(f"Setting male voice: {voice.name}")
+                    local_tts.setProperty('voice', voice.id)
+                    voice_set = True
+                    break
+            
+            # If no male voice found, try any English voice
+            if not voice_set:
+                for voice in voices:
+                    if 'english' in voice.name.lower():
+                        print(f"Setting English voice: {voice.name}")
+                        local_tts.setProperty('voice', voice.id)
+                        voice_set = True
+                        break
+            
+            # Save synthesized speech to the BytesIO object
+            local_tts.save_to_file(text, audio_bytes)
+            local_tts.runAndWait()
+            
+            # Get the audio data
+            audio_bytes.seek(0)
+            audio_data = audio_bytes.getvalue()
+            
+            if audio_data and len(audio_data) > 1000:  # Make sure we have meaningful data (more than 1KB)
+                print(f"Successfully generated speech with local TTS ({len(audio_data)} bytes)")
+                return audio_data
+            else:
+                print("Local TTS generated empty or too small audio data")
+        except Exception as local_error:
+            print(f"Local TTS error: {local_error}")
+    
+    print("Falling back to browser speech synthesis - sending empty audio")
+    
+    # Instead of generating a beep, return a specially crafted response that signals
+    # to the client to use browser TTS
+    return None
+
+# New endpoint to stream audio directly
+@app.route('/stream_audio', methods=['POST'])
+def stream_audio():
+    """Stream audio directly without saving to file"""
+    try:
+        data = request.json
+        text = data.get('text')
+        
+        if not text:
+            return jsonify({"error": "Missing text parameter"}), 400
+        
+        # Check if text is too long or complex for server TTS
+        if len(text) > 1500 or text.count('.') > 15:
+            print(f"Text is too long or complex for server TTS ({len(text)} chars, {text.count('.')} sentences). Falling back to browser TTS")
+            return jsonify({
+                "use_browser_tts": True,
+                "text": text
+            }), 200
+        
+        # Check for browser platform from request headers
+        user_agent = request.headers.get('User-Agent', '').lower()
+        # Some browsers have better built-in TTS than others
+        if 'chrome' in user_agent and 'android' not in user_agent:
+            # Chrome on desktop has excellent TTS, prefer it over server TTS
+            print("Chrome browser detected, using browser TTS for better quality")
+            return jsonify({
+                "use_browser_tts": True,
+                "text": text
+            }), 200
+        
+        # Proceed with server-side TTS
+        audio_content = generate_speech_stream(text)
+        
+        if audio_content:
+            return Response(
+                audio_content,
+                mimetype='audio/mpeg',
+                headers={
+                    'Content-Disposition': 'inline',
+                    'Content-Type': 'audio/mpeg',
+                    'Cache-Control': 'no-cache'
+                }
+            )
+        else:
+            # If we couldn't generate audio, tell the client to use browser TTS
+            print("Failed to generate speech, falling back to browser TTS")
+            return jsonify({
+                "use_browser_tts": True,
+                "text": text
+            }), 200
+    except Exception as e:
+        print(f"Error in stream_audio endpoint: {e}")
+        import traceback
+        print(traceback.format_exc())
+        return jsonify({"use_browser_tts": True, "text": data.get('text')}), 200
     
 @app.route('/start_interview', methods=['POST'])
 def start_interview():
@@ -135,26 +295,7 @@ def start_interview():
         # Initialize the interview with Gemini
         interview_intro = initialize_interview(name, resume_text)
         
-        # Generate audio if voice mode is enabled
-        audio_file_path = None
-        if voice_mode:  # Remove the tts_client check to allow local TTS to work
-            try:
-                # Generate a unique audio file name
-                audio_file_name = f"intro_{uuid.uuid4()}.mp3"
-                audio_file_path = os.path.join(AUDIO_DIR, audio_file_name)
-                
-                # Generate speech from text
-                result_path = generate_speech(interview_intro, audio_file_path)
-                # Use the returned path which might be different if using WAV
-                if result_path and result_path != audio_file_path:
-                    audio_file_path = result_path
-                
-                print(f"Generated audio for introduction: {audio_file_path}")
-            except Exception as audio_error:
-                print(f"Error generating audio: {audio_error}")
-                audio_file_path = None
-        
-        # Save the session
+        # Create session data
         session_data = {
             "session_id": session_id,
             "candidate_name": name,
@@ -168,11 +309,8 @@ def start_interview():
             "timestamp": time.time()
         }
         
-        if not save_session(session_id, session_data):
-            return jsonify({
-                "success": False,
-                "error": "Failed to save session data. Please try again."
-            }), 500
+        # Store session in memory
+        active_sessions[session_id] = session_data
         
         response_data = {
             "success": True,
@@ -180,9 +318,9 @@ def start_interview():
             "message": interview_intro
         }
         
-        # Add audio URL to response if voice mode is enabled
-        if voice_mode and audio_file_path:
-            response_data["audio_url"] = f"/get_audio/{os.path.basename(audio_file_path)}"
+        # Add text for audio generation instead of audio URL
+        if voice_mode:
+            response_data["text_for_audio"] = interview_intro
         
         return jsonify(response_data)
         
@@ -208,8 +346,8 @@ def interview_response():
         return jsonify({"error": "Missing session_id or message"}), 400
     
     try:
-        # Load the session
-        session_data = load_session(session_id)
+        # Get session from memory
+        session_data = active_sessions.get(session_id)
         if not session_data:
             return jsonify({"error": "Session not found"}), 404
         
@@ -225,76 +363,74 @@ def interview_response():
         # Update conversation with AI response
         session_data["conversation"].append({"role": "assistant", "content": ai_response})
         
-        # Generate audio if voice mode is enabled
-        audio_file_path = None
-        if voice_mode:  # Remove the tts_client check to allow local TTS to work
-            try:
-                # Generate a unique audio file name
-                audio_file_name = f"response_{uuid.uuid4()}.mp3"
-                audio_file_path = os.path.join(AUDIO_DIR, audio_file_name)
-                
-                # Generate speech from text
-                result_path = generate_speech(ai_response, audio_file_path)
-                # Use the returned path which might be different if using WAV
-                if result_path and result_path != audio_file_path:
-                    audio_file_path = result_path
-                
-                print(f"Generated audio for response: {audio_file_path}")
-            except Exception as audio_error:
-                print(f"Error generating audio: {audio_error}")
-                audio_file_path = None
-        
-        # Save updated session
-        save_session(session_id, session_data)
+        # Update the session in memory
+        active_sessions[session_id] = session_data
         
         response_data = {
             "success": True,
             "message": ai_response
         }
         
-        # Add audio URL to response if voice mode is enabled
-        if voice_mode and audio_file_path:
-            response_data["audio_url"] = f"/get_audio/{os.path.basename(audio_file_path)}"
+        # Add text for audio generation instead of audio URL
+        if voice_mode:
+            response_data["text_for_audio"] = ai_response
         
         return jsonify(response_data)
         
     except Exception as e:
-        print(f"Error processing interview response: {e}")
+        print(f"Error processing response: {e}")
         return jsonify({
             "success": False,
             "error": str(e)
         }), 500
 
+@app.route('/get_session_data', methods=['GET'])
+def get_session_data():
+    """Get session data by ID"""
+    session_id = request.args.get('session_id')
+    
+    if not session_id:
+        return jsonify({"error": "Missing session_id parameter"}), 400
+        
+    session_data = active_sessions.get(session_id)
+    
+    if not session_data:
+        return jsonify({"error": "Session not found"}), 404
+        
+    return jsonify({
+        "success": True,
+        "session_data": session_data
+    })
+
 @app.route('/end_interview', methods=['POST'])
 def end_interview():
-    """End the interview and get final assessment"""
+    """End the interview and provide final assessment"""
     data = request.json
     session_id = data.get('session_id')
     
     if not session_id:
         return jsonify({"error": "Missing session_id"}), 400
+        
+    # Get session from memory
+    session_data = active_sessions.get(session_id)
+    if not session_data:
+        return jsonify({"error": "Session not found"}), 404
     
     try:
-        # Load the session
-        session_data = load_session(session_id)
-        if not session_data:
-            return jsonify({"error": "Session not found"}), 404
-        
         # Generate final assessment
-        final_assessment = generate_final_assessment(session_data)
+        assessment = generate_assessment(session_data)
         
-        # Update session with final assessment
-        session_data["final_assessment"] = final_assessment
-        session_data["status"] = "completed"
+        # Add assessment to session data
+        session_data["assessment"] = assessment
+        session_data["ended_at"] = time.time()
         
-        # Save updated session
-        save_session(session_id, session_data)
+        # Update in memory
+        active_sessions[session_id] = session_data
         
         return jsonify({
             "success": True,
-            "assessment": final_assessment
+            "assessment": assessment
         })
-        
     except Exception as e:
         print(f"Error ending interview: {e}")
         return jsonify({
@@ -302,378 +438,191 @@ def end_interview():
             "error": str(e)
         }), 500
 
-def initialize_interview(name, resume_text):
-    """Initialize the interview using Gemini API"""
-    try:
-        model = genai.GenerativeModel("gemini-1.5-flash")
-        
-        # Truncate resume text if it's too long (Gemini has context limits)
-        max_resume_length = 5000  # Characters, not tokens
-        if len(resume_text) > max_resume_length:
-            print(f"Resume too long ({len(resume_text)} chars), truncating to {max_resume_length} chars")
-            resume_text = resume_text[:max_resume_length] + "... [truncated for length]"
-        
-        prompt = f"""
-        You are an AI technical interviewer named TechInterviewer. 
-        You will conduct a technical interview with {name}.
-        
-        Here is their resume:
-        {resume_text}
-        
-        Based on this resume, conduct a technical interview focusing on their skills and experience.
-        Keep these guidelines in mind:
-        1. Start with a friendly introduction (e.g., "Hello" or "Good day")
-        2. Ask only ONE brief question about their background or a specific skill from their resume
-        3. Be conversational and encouraging
-        4. Use short sentences that are easy to speak aloud
-        5. Avoid long explanations or multiple questions in a row
-        
-        Begin the interview with a brief introduction and your first question.
-        IMPORTANT: Keep your response under 100 words, using simple sentences that are easy to speak aloud.
-        """
-        
-        try:
-            print("Generating interview introduction with Gemini...")
-            response = model.generate_content(prompt)
-            result = response.text.strip()
-            print("Successfully generated interview introduction")
-            return result
-        except Exception as e:
-            print(f"Error generating content with Gemini: {e}")
-            import traceback
-            print(f"Gemini traceback: {traceback.format_exc()}")
-            raise
-    except Exception as e:
-        print(f"Error initializing interview: {e}")
-        return f"Hello, {name}! I'm TechInterviewer, an AI assistant. Let's begin our technical interview. Could you tell me a bit about your background?"
-
-def get_next_interview_question(session_data):
-    """Generate the next interview question based on conversation history"""
-    model = genai.GenerativeModel("gemini-1.5-flash")
-    
-    # Extract conversation history
-    conversation = session_data["conversation"]
-    resume_text = session_data.get("resume_text", "")
-    candidate_name = session_data.get("candidate_name", "Candidate")
-    
-    # Format conversation for the prompt
-    conversation_text = ""
-    for msg in conversation[-5:]:  # Only use the last 5 messages for context
-        role = msg["role"]
-        if role == "system":
-            continue
-        content = msg["content"]
-        conversation_text += f"{'You' if role == 'assistant' else candidate_name}: {content}\n\n"
-    
-    prompt = f"""
-    You are TechInterviewer, an AI technical interviewer.
-    You are conducting an interview with {candidate_name}.
-    
-    Resume highlights:
-    {resume_text[:500]}...
-    
-    Recent conversation:
-    {conversation_text}
-    
-    Continue the interview with an appropriate technical question or response.
-    Focus on ONE of these areas:
-    1. Programming skills and technical knowledge
-    2. Problem-solving abilities
-    3. Previous work experience
-    4. Projects and achievements
-    
-    Guidelines:
-    - Ask only ONE question at a time
-    - Use short, clear sentences that are easy to speak aloud
-    - If they ask you a question, provide a brief response and then ask your next question
-    - Avoid long explanations
-    - Use a warm but professional tone
-    
-    IMPORTANT: Your response must be under 75 words total and easy to speak aloud.
-    """
-    
-    try:
-        response = model.generate_content(prompt)
-        return response.text.strip()
-    except Exception as e:
-        print(f"Error generating next question: {e}")
-        return "That's interesting. I'm curious - could you tell me more about a challenging project you've worked on recently?"
-
-def generate_final_assessment(session_data):
-    """Generate a final assessment of the candidate"""
-    model = genai.GenerativeModel("gemini-1.5-flash")
-    
-    # Extract conversation history
-    conversation = session_data["conversation"]
-    resume_text = session_data.get("resume_text", "")
-    candidate_name = session_data.get("candidate_name", "Candidate")
-    
-    # Format conversation for the prompt
-    conversation_text = ""
-    for msg in conversation:
-        role = msg["role"]
-        if role == "system":
-            continue
-        content = msg["content"]
-        conversation_text += f"{'TechInterviewer' if role == 'assistant' else candidate_name}: {content}\n\n"
-    
-    prompt = f"""
-You are an AI technical interviewer named TechInterviewer.
-You speak in a warm and conversational tone, similar to a friendly professor or experienced HR professional.
-
-You have conducted a technical interview with {candidate_name}.
-    
-Resume:
-{resume_text[:1000]}...
-    
-Interview conversation:
-{conversation_text}
-    
-Based on this interview, provide a comprehensive assessment of the candidate including:
-1. Technical skills assessment
-2. Communication skills
-3. Problem-solving abilities
-4. Cultural fit
-5. Strengths and weaknesses
-6. Overall impression
-7. Recommendations for improvement
-
-Format your assessment as JSON with these sections.
-"""
-    
-    try:
-        response = model.generate_content(prompt)
-        assessment_text = response.text.strip()
-        
-        # Try to parse as JSON
-        try:
-            # Clean up response if it contains code blocks
-            if assessment_text.startswith("```json"):
-                assessment_text = assessment_text[7:]
-            elif assessment_text.startswith("```"):
-                assessment_text = assessment_text[3:]
-            
-            if assessment_text.endswith("```"):
-                assessment_text = assessment_text[:-3]
-            
-            assessment_json = json.loads(assessment_text.strip())
-            return assessment_json
-        except json.JSONDecodeError:
-            # If not valid JSON, return as text
-            return {"text_assessment": assessment_text}
-        
-    except Exception as e:
-        print(f"Error generating final assessment: {e}")
-        return {
-            "text_assessment": f"Assessment for {candidate_name}: Thank you for participating in this technical interview. You showed promising skills, and I recommend further evaluation to make a complete assessment."
-        }
-
-def save_session(session_id, data):
-    """Save session data to file"""
-    try:
-        # Ensure the sessions directory exists
-        os.makedirs(SESSIONS_DIR, exist_ok=True)
-        
-        session_file = os.path.join(SESSIONS_DIR, f"{session_id}.json")
-        print(f"Saving session to: {session_file}")
-        
-        # Use a temporary file for atomic write
-        temp_session_file = f"{session_file}.tmp"
-        with open(temp_session_file, 'w') as f:
-            json.dump(data, f)
-        
-        # Rename the temporary file to the actual file (atomic operation)
-        if os.path.exists(session_file):
-            os.unlink(session_file)  # Remove existing file if it exists
-        os.rename(temp_session_file, session_file)
-        
-        print(f"Session saved successfully")
-        return True
-    except Exception as e:
-        print(f"Error saving session: {e}")
-        import traceback
-        print(f"Save session traceback: {traceback.format_exc()}")
-        return False
-
-def load_session(session_id):
-    """Load session data from file"""
-    session_file = os.path.join(SESSIONS_DIR, f"{session_id}.json")
-    if os.path.exists(session_file):
-        with open(session_file, 'r') as f:
-            return json.load(f)
-    return None
-
-def generate_speech(text, output_file_path):
-    """Generate speech from text using Google TTS or local TTS fallback"""
-    # First try Google Cloud TTS if available
-    if tts_client and using_cloud_tts:
-        try:
-            print("Using Google Cloud TTS...")
-            # Simplify the text to make it more digestible
-            text = text.replace('\n', ' ').strip()
-            
-            # Limit text length for more reliable processing
-            if len(text) > 2000:
-                text = text[:2000] + "..."
-                print(f"Text was too long and was truncated to {len(text)} chars")
-            
-            # Set the text input to be synthesized
-            synthesis_input = texttospeech.SynthesisInput(text=text)
-            
-            # Build the voice request with neutral voice
-            voice = texttospeech.VoiceSelectionParams(
-                language_code="en-US",
-                name="en-US-Neural2-D",  # Standard male voice
-                ssml_gender=texttospeech.SsmlVoiceGender.MALE
-            )
-            
-            # Select the type of audio file you want returned
-            audio_config = texttospeech.AudioConfig(
-                audio_encoding=texttospeech.AudioEncoding.MP3,
-                speaking_rate=0.9,  # Slightly slower for better clarity
-                pitch=0.0  # Default pitch
-            )
-            
-            # Perform the text-to-speech request
-            response = tts_client.synthesize_speech(
-                input=synthesis_input, voice=voice, audio_config=audio_config
-            )
-            
-            # Write the audio content to file
-            with open(output_file_path, "wb") as out:
-                out.write(response.audio_content)
-                
-            print(f"Google Cloud TTS audio written to file: {output_file_path}")
-            return output_file_path
-        except Exception as e:
-            print(f"Google Cloud TTS failed: {e}")
-            if local_tts:
-                print("Falling back to local TTS...")
-                # Call local TTS but use WAV instead of MP3
-                wav_path = output_file_path.replace('.mp3', '.wav')
-                try:
-                    # Return the actual path from the local TTS function
-                    return generate_local_tts(text, wav_path)
-                except Exception as local_e:
-                    print(f"Local TTS fallback also failed: {local_e}")
-                    raise
-            else:
-                raise
-    elif local_tts:
-        # Use local TTS as primary option
-        print("Using local TTS as primary option...")
-        # Use WAV instead of MP3
-        wav_path = output_file_path.replace('.mp3', '.wav')
-        try:
-            # Return the actual path from the local TTS function
-            return generate_local_tts(text, wav_path)
-        except Exception as local_e:
-            print(f"Local TTS failed as primary option: {local_e}")
-            raise
-    else:
-        print("No TTS system available")
-        raise Exception("Text-to-Speech service not available")
-
-def generate_local_tts(text, output_file_path):
-    """Generate speech using local pyttsx3 TTS engine"""
-    if not local_tts:
-        raise Exception("Local TTS not available")
-        
-    try:
-        print(f"Generating speech using local TTS engine")
-        # Simplify the text
-        text = text.replace('\n', ' ').strip()
-        if len(text) > 2000:
-            text = text[:2000] + "..."
-            
-        # Try to get available voices and set a male voice if possible
-        voices = local_tts.getProperty('voices')
-        for voice in voices:
-            if 'male' in voice.name.lower():
-                print(f"Setting male voice: {voice.name}")
-                local_tts.setProperty('voice', voice.id)
-                break
-                
-        # Configure speech rate
-        local_tts.setProperty('rate', 150)  # Normal speaking rate
-            
-        # Save to WAV file (pyttsx3 uses WAV)
-        wav_path = output_file_path
-        if not wav_path.endswith('.wav'):
-            wav_path = output_file_path.replace('.mp3', '.wav')
-        
-        # Run in blocking mode
-        print(f"Saving TTS to file: {wav_path}")
-        local_tts.save_to_file(text, wav_path)
-        local_tts.runAndWait()
-        
-        print(f"Local TTS saved to: {wav_path}")
-        # Return the path instead of boolean
-        return wav_path
-    except Exception as e:
-        print(f"Local TTS failed: {e}")
-        import traceback
-        print(f"Traceback: {traceback.format_exc()}")
-        raise
-
-@app.route('/get_audio/<filename>', methods=['GET'])
-def get_audio(filename):
-    """Serve audio files"""
-    try:
-        # Clean filename to prevent directory traversal
-        cleaned_filename = os.path.basename(filename)
-        
-        # Check for both MP3 and WAV versions
-        mp3_path = os.path.join(AUDIO_DIR, cleaned_filename)
-        wav_path = os.path.join(AUDIO_DIR, cleaned_filename.replace('.mp3', '.wav'))
-        
-        # Determine which file to serve
-        if os.path.exists(mp3_path):
-            file_path = mp3_path
-            mimetype = 'audio/mpeg'
-        elif os.path.exists(wav_path):
-            file_path = wav_path
-            mimetype = 'audio/wav'
-        else:
-            print(f"Audio file not found: {mp3_path} or {wav_path}")
-            return jsonify({"error": "Audio file not found"}), 404
-        
-        # Get the file size for content-length header
-        file_size = os.path.getsize(file_path)
-        print(f"Serving audio file: {file_path}, size: {file_size} bytes, type: {mimetype}")
-        
-        # Send file with explicit MIME type and cache control headers
-        response = send_file(
-            file_path, 
-            mimetype=mimetype,
-            as_attachment=False,
-            conditional=True
-        )
-        
-        # Add cache control headers
-        response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
-        response.headers['Pragma'] = 'no-cache'
-        response.headers['Expires'] = '0'
-        response.headers['Content-Length'] = str(file_size)
-        
-        return response
-    except Exception as e:
-        print(f"Error serving audio file: {e}")
-        import traceback
-        print(traceback.format_exc())
-        return jsonify({"error": str(e)}), 500
-
 @app.route('/speech_to_text', methods=['POST'])
 def speech_to_text():
-    """Convert speech to text using Google Speech-to-Text API"""
-    # This is a placeholder for the speech-to-text functionality
-    # You would need to implement this using a service like Google Speech-to-Text
-    # For now, we'll return an error message
+    """Process audio and convert to text (placeholder)"""
     return jsonify({
-        "success": False,
-        "error": "Speech-to-text functionality not implemented yet",
-        "text": ""
-    }), 501
+        "success": True,
+        "text": "Speech recognition not implemented in this version"
+    })
 
-if __name__ == '__main__':
-    app.run(debug=True, port=5001)
+def initialize_interview(candidate_name, resume_text=""):
+    """Initialize the interview with Gemini"""
+    try:
+        # Configure the model
+        model = genai.GenerativeModel(
+            model_name="gemini-pro",
+            generation_config={
+                "temperature": 0.7,
+                "top_p": 0.95,
+                "top_k": 64,
+                "max_output_tokens": 8192,
+            }
+        )
+        
+        # Create the prompt
+        prompt = f"""
+You are an expert AI technical interviewer for a software engineering position. Your task is to conduct a professional, fair, and thorough technical interview with a candidate named {candidate_name}.
+
+Your goal is to assess the candidate's technical skills, problem-solving abilities, and communication effectiveness through a friendly but challenging interview format.
+
+Please begin by:
+1. Introducing yourself as an AI Technical Interviewer
+2. Explaining that you will be asking a series of technical questions
+3. Asking an initial question about the candidate's technical background or interests
+4. Keeping your questions and responses concise and focused
+
+If a resume was provided, base your questions on the candidate's experience and skills mentioned in the resume. 
+
+Resume content:
+{resume_text if resume_text else "No resume provided. Ask general technical questions appropriate for a software engineering position."}
+
+Remember to:
+- Ask one question at a time
+- Keep your responses conversational but professional
+- Focus on technical content rather than personality assessment
+- Provide helpful guidance if the candidate struggles, but don't give away answers
+- Maintain a respectful and supportive tone throughout the interview
+"""
+
+        # Generate the response
+        completion = model.generate_content(prompt)
+        
+        # Parse the response
+        initial_message = completion.text
+        
+        print(f"Generated initial message: {initial_message[:100]}...")
+        return initial_message
+        
+    except Exception as e:
+        print(f"Error initializing interview: {e}")
+        return "Hello! I'm your AI interviewer. Let's begin with a simple question: Could you tell me about your technical background and experience?"
+
+def get_next_interview_question(session_data):
+    """Generate the next interview question based on the conversation history"""
+    try:
+        # Configure the model
+        model = genai.GenerativeModel(
+            model_name="gemini-pro",
+            generation_config={
+                "temperature": 0.7,
+                "top_p": 0.95,
+                "top_k": 64,
+                "max_output_tokens": 8192,
+            }
+        )
+        
+        # Extract conversation history
+        conversation = session_data.get("conversation", [])
+        candidate_name = session_data.get("candidate_name", "Candidate")
+        
+        # Create context from previous messages (up to last 10 messages to stay within context limits)
+        context = "\n".join([
+            f"{msg['role'].upper()}: {msg['content']}" 
+            for msg in conversation[-10:]
+        ])
+        
+        # Create the prompt for the next question
+        prompt = f"""
+You are an expert AI technical interviewer for a software engineering position. You are currently interviewing {candidate_name}.
+
+Here is the conversation so far:
+
+{context}
+
+Please provide your next response as the interviewer. Your response should:
+1. Acknowledge the candidate's last answer with brief feedback
+2. Ask a follow-up question OR move to a new relevant technical topic
+3. Keep your response conversational, concise, and focused on technical assessment
+4. Be encouraging but also challenging to assess the candidate's knowledge
+
+Remember to:
+- Ask only one question at a time
+- Be specific in your questions rather than being vague
+- Maintain a professional and supportive tone
+- Focus on technical skills assessment rather than personality
+"""
+
+        # Generate the response
+        completion = model.generate_content(prompt)
+        
+        # Parse the response
+        next_question = completion.text
+        
+        print(f"Generated next question: {next_question[:100]}...")
+        return next_question
+        
+    except Exception as e:
+        print(f"Error generating next question: {e}")
+        return "That's interesting. Could you tell me more about how you've applied these skills in your projects or work experience?"
+
+def generate_assessment(session_data):
+    """Generate an assessment of the candidate based on the interview"""
+    try:
+        # Configure the model
+        model = genai.GenerativeModel(
+            model_name="gemini-pro",
+            generation_config={
+                "temperature": 0.7,
+                "top_p": 0.95,
+                "top_k": 64,
+                "max_output_tokens": 8192,
+            }
+        )
+        
+        # Extract conversation history
+        conversation = session_data.get("conversation", [])
+        candidate_name = session_data.get("candidate_name", "Candidate")
+        
+        # Create context from all messages
+        context = "\n".join([
+            f"{msg['role'].upper()}: {msg['content']}" 
+            for msg in conversation
+        ])
+        
+        # Create the prompt for assessment
+        prompt = f"""
+You are an expert AI technical interviewer who has just completed an interview with a software engineering candidate named {candidate_name}.
+
+Here is the full interview conversation:
+
+{context}
+
+Please provide a comprehensive assessment of the candidate's performance in the following format:
+
+1. Overall Assessment: A brief 1-2 paragraph summary of the candidate's interview performance
+
+2. Technical Skills: Evaluate technical knowledge, with specific examples from the interview
+   - Strengths: List 3-5 technical strengths demonstrated
+   - Areas for Improvement: List 2-3 areas where technical knowledge could be improved
+
+3. Problem Solving: Evaluate how effectively the candidate approached problems
+   - Logical Reasoning: Rate 1-10 with justification
+   - Creativity: Rate 1-10 with justification
+
+4. Communication: Evaluate how clearly the candidate expressed technical concepts
+   - Clarity: Rate 1-10 with justification
+   - Conciseness: Rate 1-10 with justification
+
+5. Overall Rating: Provide a numerical rating from 1-10 with brief justification
+
+6. Hiring Recommendation: Recommend "Hire", "Consider with reservations", or "Do not hire" with brief explanation
+
+Please be fair, objective, and specific in your assessment, basing all evaluations on concrete examples from the interview.
+"""
+
+        # Generate the response
+        completion = model.generate_content(prompt)
+        
+        # Parse the response
+        assessment = completion.text
+        
+        print(f"Generated assessment: {assessment[:100]}...")
+        return assessment
+        
+    except Exception as e:
+        print(f"Error generating assessment: {e}")
+        return "Assessment could not be generated due to an error. Please try again."
+
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=5001, debug=True)
