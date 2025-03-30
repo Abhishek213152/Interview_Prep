@@ -12,6 +12,7 @@ import Ended from "./components/Ended";
 import Result from "./components/Result";
 import Results from "./components/Results";
 import Profile from "./components/Profile";
+import Upload from "./components/Upload";
 
 const App = () => {
   return (
@@ -29,6 +30,7 @@ const App = () => {
         <Route path="/result" element={<Result />} />
         <Route path="/results" element={<Results />} />
         <Route path="/profile" element={<Profile />} />
+        <Route path="/upload" element={<Upload />} />
       </Routes>
     </div>
   );

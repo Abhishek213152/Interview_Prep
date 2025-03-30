@@ -392,312 +392,296 @@ const Profile = () => {
     }
   };
 
-  if (loading) {
-    return (
-      <div className="bg-gradient-to-r from-black to-blue-900 text-white min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <div className="inline-block animate-spin rounded-full h-12 w-12 border-t-4 border-blue-500 border-solid mb-4"></div>
-          <p className="text-xl">Loading profile...</p>
-        </div>
-      </div>
-    );
-  }
-
   return (
-    <div className="bg-gradient-to-r from-black to-blue-900 text-white min-h-screen">
+    <div className="min-h-screen bg-gradient-to-r from-black to-blue-900 text-white">
       {/* Header */}
-      <header className="flex justify-between items-center p-6 bg-gray-900 shadow-lg">
+      <header className="flex justify-between items-center p-3 sm:p-4 md:p-6 bg-gray-900 shadow-lg">
         <div className="flex items-center">
-          <div className="mr-3 bg-blue-600 p-2 rounded-lg">
-            <FaLaptopCode className="text-white text-2xl" />
+          <div className="mr-2 sm:mr-3 bg-blue-600 p-1 sm:p-2 rounded-lg">
+            <FaLaptopCode className="text-white text-lg sm:text-2xl" />
           </div>
-          <h1 className="text-2xl font-bold">User Profile</h1>
+          <h1 className="text-xl sm:text-2xl font-bold">Profile</h1>
         </div>
-
-        <div className="flex items-center space-x-4">
+        <div className="flex space-x-2 sm:space-x-4">
           <button
             onClick={() => navigate("/home")}
-            className="bg-gray-800 hover:bg-gray-700 text-white px-4 py-2 rounded flex items-center gap-2"
+            className="flex items-center px-2 sm:px-3 py-1 sm:py-2 bg-gray-800 hover:bg-gray-700 rounded-lg text-sm sm:text-base"
           >
-            <FaHome />
-            <span className="hidden sm:inline">Home</span>
+            <FaHome className="mr-1 sm:mr-2" /> Home
           </button>
           <button
             onClick={handleLogout}
-            className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded flex items-center gap-2"
+            className="flex items-center px-2 sm:px-3 py-1 sm:py-2 bg-red-700 hover:bg-red-600 rounded-lg text-sm sm:text-base"
           >
-            <FaSignOutAlt />
-            <span className="hidden sm:inline">Logout</span>
+            <FaSignOutAlt className="mr-1 sm:mr-2" /> Logout
           </button>
         </div>
       </header>
 
-      <div className="container mx-auto py-8 px-4">
-        <div className="max-w-5xl mx-auto">
+      {loading ? (
+        <div className="flex justify-center items-center h-[calc(100vh-80px)]">
+          <div className="animate-spin rounded-full h-12 w-12 border-t-4 border-blue-500"></div>
+        </div>
+      ) : (
+        <div className="container mx-auto py-6 px-4 max-w-5xl">
           <div className="bg-gray-800 rounded-xl shadow-lg overflow-hidden">
             {/* Profile Header */}
-            <div className="bg-gradient-to-r from-blue-800 to-purple-800 p-8 flex flex-col md:flex-row items-center gap-6">
-              <div className="relative w-32 h-32 group">
-                {editMode ? (
-                  <div className="relative w-32 h-32 overflow-hidden rounded-full border-4 border-gray-600">
-                    {imagePreview ? (
-                      <img
-                        src={imagePreview}
-                        alt="Profile preview"
-                        className="w-full h-full object-cover"
-                      />
-                    ) : (
-                      <div className="w-full h-full rounded-full bg-gray-700 flex items-center justify-center">
-                        <FaUserCircle className="text-gray-400 text-6xl" />
-                      </div>
-                    )}
-
-                    <div className="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                      <input
-                        type="file"
-                        ref={fileInputRef}
-                        className="hidden"
-                        accept="image/*"
-                        onChange={handleImageChange}
-                      />
-
-                      <div className="flex flex-col items-center gap-2">
+            <div className="p-6 sm:p-8 md:p-10 flex flex-col sm:flex-row items-center sm:items-start space-y-4 sm:space-y-0 sm:space-x-6">
+              {/* Profile Image */}
+              <div className="relative group">
+                <div className="w-24 h-24 sm:w-32 sm:h-32 md:w-40 md:h-40 rounded-full overflow-hidden bg-gray-700 flex items-center justify-center">
+                  {imagePreview ? (
+                    <img
+                      src={imagePreview}
+                      alt="Profile"
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <FaUserCircle className="text-gray-500 w-full h-full" />
+                  )}
+                </div>
+                {editMode && (
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <div className="absolute inset-0 bg-black bg-opacity-50 rounded-full"></div>
+                    <div className="flex flex-col items-center z-10 space-y-1">
+                      <button
+                        onClick={() => fileInputRef.current.click()}
+                        className="bg-blue-600 hover:bg-blue-700 text-white p-1 rounded-full"
+                      >
+                        <FaCamera className="text-lg" />
+                      </button>
+                      {imagePreview && (
                         <button
-                          onClick={() => fileInputRef.current.click()}
-                          className="p-2 bg-blue-600 rounded-full"
+                          onClick={removeProfileImage}
+                          className="bg-red-600 hover:bg-red-700 text-white p-1 rounded-full"
                         >
-                          <FaCamera className="text-white" />
+                          <FaTrash className="text-lg" />
                         </button>
-
-                        {imagePreview && (
-                          <button
-                            onClick={removeProfileImage}
-                            className="p-2 bg-red-600 rounded-full"
-                          >
-                            <FaTrash className="text-white" />
-                          </button>
-                        )}
-                      </div>
+                      )}
                     </div>
-                  </div>
-                ) : (
-                  <div className="w-32 h-32 rounded-full overflow-hidden border-4 border-gray-600">
-                    {user?.displayImage ? (
-                      <img
-                        src={user.displayImage}
-                        alt={`${user.firstName} ${user.lastName}`}
-                        className="w-full h-full object-cover"
-                      />
-                    ) : (
-                      <div className="w-full h-full rounded-full bg-gray-700 flex items-center justify-center">
-                        <FaUserCircle className="text-gray-400 text-6xl" />
-                      </div>
-                    )}
+                    <input
+                      type="file"
+                      ref={fileInputRef}
+                      onChange={handleImageChange}
+                      className="hidden"
+                      accept="image/*"
+                    />
                   </div>
                 )}
               </div>
 
-              <div className="text-center md:text-left">
-                <h2 className="text-3xl font-bold">
-                  {user?.firstName} {user?.lastName}
-                </h2>
-                <p className="text-blue-300">{user?.email}</p>
-                {!editMode && (
-                  <button
-                    onClick={() => setEditMode(true)}
-                    className="mt-4 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded flex items-center gap-2 mx-auto md:mx-0"
-                  >
-                    <FaUserEdit />
-                    <span>Edit Profile</span>
-                  </button>
+              {/* Profile Info */}
+              <div className="flex-1 text-center sm:text-left">
+                {!editMode ? (
+                  <div>
+                    <h2 className="text-2xl sm:text-3xl font-bold mb-1">
+                      {userData.firstName} {userData.lastName}
+                    </h2>
+                    <p className="text-gray-400 text-sm sm:text-base mb-2">
+                      {userData.email}
+                    </p>
+                    <p className="text-gray-300 text-sm sm:text-base mb-4 max-w-lg">
+                      {userData.bio ||
+                        "No bio available. Click edit to add one."}
+                    </p>
+                    <button
+                      onClick={() => setEditMode(true)}
+                      className="bg-blue-600 hover:bg-blue-700 text-white py-1 px-3 sm:py-2 sm:px-4 rounded-lg flex items-center text-sm sm:text-base"
+                    >
+                      <FaUserEdit className="mr-2" /> Edit Profile
+                    </button>
+                  </div>
+                ) : (
+                  <div className="w-full space-y-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-gray-400 text-sm font-medium mb-1">
+                          First Name
+                        </label>
+                        <input
+                          type="text"
+                          name="firstName"
+                          value={userData.firstName}
+                          onChange={handleChange}
+                          className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-blue-500"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-gray-400 text-sm font-medium mb-1">
+                          Last Name
+                        </label>
+                        <input
+                          type="text"
+                          name="lastName"
+                          value={userData.lastName}
+                          onChange={handleChange}
+                          className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-blue-500"
+                        />
+                      </div>
+                    </div>
+                    <div>
+                      <label className="block text-gray-400 text-sm font-medium mb-1">
+                        Email
+                      </label>
+                      <input
+                        type="email"
+                        name="email"
+                        value={userData.email}
+                        onChange={handleChange}
+                        disabled
+                        className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-gray-400 focus:outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-gray-400 text-sm font-medium mb-1">
+                        Bio
+                      </label>
+                      <textarea
+                        name="bio"
+                        value={userData.bio}
+                        onChange={handleChange}
+                        className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-blue-500 min-h-[80px]"
+                        placeholder="Tell us about yourself..."
+                      ></textarea>
+                    </div>
+                    <div className="flex space-x-3">
+                      <button
+                        onClick={saveChanges}
+                        className="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-2 px-4 rounded-lg flex items-center justify-center"
+                        disabled={uploadingImage}
+                      >
+                        {uploadingImage ? (
+                          <span className="flex items-center">
+                            <svg
+                              className="animate-spin -ml-1 mr-2 h-4 w-4 text-white"
+                              xmlns="http://www.w3.org/2000/svg"
+                              fill="none"
+                              viewBox="0 0 24 24"
+                            >
+                              <circle
+                                className="opacity-25"
+                                cx="12"
+                                cy="12"
+                                r="10"
+                                stroke="currentColor"
+                                strokeWidth="4"
+                              ></circle>
+                              <path
+                                className="opacity-75"
+                                fill="currentColor"
+                                d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
+                              ></path>
+                            </svg>
+                            Saving...
+                          </span>
+                        ) : (
+                          <span className="flex items-center">
+                            <FaSave className="mr-2" /> Save Changes
+                          </span>
+                        )}
+                      </button>
+                      <button
+                        onClick={cancelEdit}
+                        className="bg-gray-600 hover:bg-gray-700 text-white py-2 px-4 rounded-lg flex items-center justify-center"
+                      >
+                        <FaTimes className="mr-2" /> Cancel
+                      </button>
+                    </div>
+                  </div>
                 )}
               </div>
             </div>
 
-            {/* Profile Content */}
-            <div className="p-6">
-              {editMode ? (
-                <div className="bg-gray-700 p-6 rounded-lg mb-8">
-                  <h3 className="text-xl font-bold text-blue-400 mb-4">
-                    Edit Profile
-                  </h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                    <div>
-                      <label className="block text-gray-300 mb-2">
-                        First Name
-                      </label>
-                      <input
-                        type="text"
-                        name="firstName"
-                        value={userData.firstName}
-                        onChange={handleChange}
-                        className="w-full p-2 bg-gray-800 border border-gray-600 rounded text-white"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-gray-300 mb-2">
-                        Last Name
-                      </label>
-                      <input
-                        type="text"
-                        name="lastName"
-                        value={userData.lastName}
-                        onChange={handleChange}
-                        className="w-full p-2 bg-gray-800 border border-gray-600 rounded text-white"
-                      />
-                    </div>
-                  </div>
-                  <div className="mb-4">
-                    <label className="block text-gray-300 mb-2">Email</label>
-                    <input
-                      type="email"
-                      name="email"
-                      value={userData.email}
-                      disabled
-                      className="w-full p-2 bg-gray-900 border border-gray-600 rounded text-gray-400 cursor-not-allowed"
-                    />
-                    <p className="text-gray-400 text-sm mt-1">
-                      Email cannot be changed
-                    </p>
-                  </div>
-                  <div className="mb-4">
-                    <label className="block text-gray-300 mb-2">Bio</label>
-                    <textarea
-                      name="bio"
-                      value={userData.bio}
-                      onChange={handleChange}
-                      className="w-full p-2 bg-gray-800 border border-gray-600 rounded text-white h-24"
-                      placeholder="Tell us about yourself..."
-                    ></textarea>
-                  </div>
-                  <div className="flex justify-end space-x-4">
-                    <button
-                      onClick={cancelEdit}
-                      className="bg-gray-600 hover:bg-gray-500 text-white px-4 py-2 rounded flex items-center gap-2"
-                    >
-                      <FaTimes />
-                      <span>Cancel</span>
-                    </button>
-                    <button
-                      onClick={saveChanges}
-                      disabled={uploadingImage}
-                      className={`${
-                        uploadingImage
-                          ? "bg-gray-500"
-                          : "bg-green-600 hover:bg-green-700"
-                      } text-white px-4 py-2 rounded flex items-center gap-2`}
-                    >
-                      {uploadingImage ? (
-                        <>
-                          <div className="animate-spin h-4 w-4 border-2 border-white rounded-full border-t-transparent"></div>
-                          <span>Uploading...</span>
-                        </>
-                      ) : (
-                        <>
-                          <FaSave />
-                          <span>Save Changes</span>
-                        </>
-                      )}
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                <>
-                  {user?.bio && (
-                    <div className="bg-gray-700 p-6 rounded-lg mb-8">
-                      <h3 className="text-xl font-bold text-blue-400 mb-4">
-                        About Me
-                      </h3>
-                      <p className="text-gray-300 whitespace-pre-line">
-                        {user.bio}
-                      </p>
-                    </div>
-                  )}
-                </>
-              )}
+            {/* Stats Section */}
+            <div className="p-6 bg-gray-900 border-t border-gray-700">
+              <h3 className="text-xl font-bold mb-4">Activity Stats</h3>
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+                <StatCard
+                  title="Coding Score"
+                  value={stats.codingScore}
+                  unit="/100"
+                  color="blue"
+                />
+                <StatCard
+                  title="Interviews Completed"
+                  value={stats.interviewsCompleted}
+                  color="purple"
+                />
+                <StatCard
+                  title="Resume Analyses"
+                  value={stats.resumeAnalysisCount}
+                  color="green"
+                />
+                <StatCard
+                  title="Questions Attempted"
+                  value={stats.totalQuestionsAttempted}
+                  color="yellow"
+                />
+                <StatCard
+                  title="Account Created"
+                  value={
+                    user?.createdAt
+                      ? new Date(user.createdAt.toDate()).toLocaleDateString()
+                      : "N/A"
+                  }
+                  color="pink"
+                  isDate
+                />
+              </div>
+            </div>
 
-              <div className="bg-gray-700 p-6 rounded-lg">
-                <h3 className="text-xl font-bold text-blue-400 mb-6">
-                  Activity Summary
-                </h3>
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-                  <div className="bg-gradient-to-br from-green-900 to-green-800 p-4 rounded-lg text-center">
-                    <p className="text-gray-300 mb-2">Coding Assessments</p>
-                    <div className="text-3xl font-bold">
-                      {stats.assessmentsCompleted || 0}
-                    </div>
-                    <p className="text-gray-400 text-sm">Completed</p>
-                  </div>
-
-                  <div className="bg-gradient-to-br from-blue-900 to-blue-800 p-4 rounded-lg text-center">
-                    <p className="text-gray-300 mb-2">Coding Assessments</p>
-                    <div className="text-3xl font-bold">
-                      {stats.codingScore || 0}
-                    </div>
-                    <p className="text-gray-400 text-sm">Score</p>
-                  </div>
-
-                  <div className="bg-gradient-to-br from-purple-900 to-purple-800 p-4 rounded-lg text-center">
-                    <p className="text-gray-300 mb-2">AI Interviews</p>
-                    <div className="text-3xl font-bold">
-                      {stats.interviewsCompleted}
-                    </div>
-                    <p className="text-gray-400 text-sm">Completed</p>
-                  </div>
-
-                  <div className="bg-gradient-to-br from-indigo-900 to-indigo-800 p-4 rounded-lg text-center">
-                    <p className="text-gray-300 mb-2">Resume Analysis</p>
-                    <div className="text-3xl font-bold">
-                      {stats.resumeAnalysisCount}
-                    </div>
-                    <p className="text-gray-400 text-sm">Analyses</p>
-                  </div>
-                </div>
-
-                <div className="mt-8">
-                  <h4 className="text-lg font-semibold text-blue-300 mb-4">
-                    Quick Actions
-                  </h4>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <button
-                      onClick={() => navigate("/difficulty")}
-                      className="p-4 rounded-lg bg-gradient-to-r from-blue-800 to-blue-700 hover:from-blue-700 hover:to-blue-600 flex items-center gap-3"
-                    >
-                      <div className="p-3 rounded-full bg-blue-900">
-                        <FaLaptopCode className="text-blue-300" />
-                      </div>
-                      <div className="text-left">
-                        <p className="font-medium text-green-400">
-                          Start Coding Assessment
-                        </p>
-                        <p className="text-sm text-gray-400 mt-1">
-                          Practice coding challenges
-                        </p>
-                      </div>
-                    </button>
-
-                    <button
-                      onClick={() => navigate("/upload")}
-                      className="p-4 rounded-lg bg-gradient-to-r from-purple-800 to-purple-700 hover:from-purple-700 hover:to-purple-600 flex items-center gap-3"
-                    >
-                      <div className="p-3 rounded-full bg-purple-900">
-                        <FaUserTie className="text-purple-300" />
-                      </div>
-                      <div className="text-left">
-                        <p className="font-medium text-green-400">
-                          Analyze Your Resume
-                        </p>
-                        <p className="text-sm text-gray-400 mt-1">
-                          Get AI feedback on your resume
-                        </p>
-                      </div>
-                    </button>
-                  </div>
-                </div>
+            {/* Quick Actions */}
+            <div className="p-6 bg-gray-800">
+              <h3 className="text-xl font-bold mb-4">Quick Actions</h3>
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+                <button
+                  onClick={() => navigate("/interview")}
+                  className="w-full py-3 px-4 bg-purple-700 hover:bg-purple-600 rounded-lg flex items-center justify-center"
+                >
+                  <FaUserTie className="mr-2" /> Start Interview
+                </button>
+                <button
+                  onClick={() => navigate("/difficulty")}
+                  className="w-full py-3 px-4 bg-blue-700 hover:bg-blue-600 rounded-lg flex items-center justify-center"
+                >
+                  <FaLaptopCode className="mr-2" /> Practice Coding
+                </button>
+                <button
+                  onClick={() => navigate("/upload")}
+                  className="w-full py-3 px-4 bg-green-700 hover:bg-green-600 rounded-lg flex items-center justify-center"
+                >
+                  <FaUserEdit className="mr-2" /> Analyze Resume
+                </button>
               </div>
             </div>
           </div>
         </div>
+      )}
+    </div>
+  );
+};
+
+const StatCard = ({ title, value, unit = "", color, isDate = false }) => {
+  const getColor = (color) => {
+    const colors = {
+      blue: "bg-blue-900/50 border-blue-500 text-blue-300",
+      purple: "bg-purple-900/50 border-purple-500 text-purple-300",
+      green: "bg-green-900/50 border-green-500 text-green-300",
+      yellow: "bg-yellow-900/50 border-yellow-500 text-yellow-300",
+      pink: "bg-pink-900/50 border-pink-500 text-pink-300",
+    };
+    return colors[color] || colors.blue;
+  };
+
+  return (
+    <div
+      className={`p-4 rounded-lg border ${getColor(
+        color
+      )} flex flex-col items-center`}
+    >
+      <h4 className="text-sm font-medium mb-1">{title}</h4>
+      <div className="text-xl sm:text-2xl font-bold">
+        {isDate ? value : value + unit}
       </div>
     </div>
   );

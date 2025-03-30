@@ -1307,78 +1307,82 @@ const Interview = () => {
     };
   }, []);
 
+  // Header component for responsiveness
+  const Header = ({ user, setMenuOpen, menuOpen, navigate, handleLogout }) => (
+    <header className="flex justify-between items-center p-3 sm:p-4 md:p-6 bg-gray-900 shadow-lg">
+      <div className="flex items-center">
+        <div className="mr-2 sm:mr-3 bg-blue-600 p-1 sm:p-2 rounded-lg">
+          <FaLaptopCode className="text-white text-lg sm:text-2xl" />
+        </div>
+        <h1 className="text-xl sm:text-2xl font-bold">AI Interview</h1>
+      </div>
+
+      {user ? (
+        <div className="relative">
+          <div className="flex items-center space-x-2 sm:space-x-4">
+            <div className="text-right hidden sm:block">
+              <p className="text-base sm:text-lg font-semibold">
+                {user.firstName} {user.lastName}
+              </p>
+              <p className="text-gray-400 text-xs sm:text-sm">{user.email}</p>
+            </div>
+            <div
+              className="w-8 h-8 sm:w-10 sm:h-10 bg-gray-600 rounded-full flex items-center justify-center cursor-pointer"
+              onClick={() => setMenuOpen(!menuOpen)}
+            >
+              <FaUserTie className="text-white text-base sm:text-xl" />
+            </div>
+          </div>
+          {menuOpen && (
+            <div className="absolute right-0 mt-2 w-40 bg-gray-800 text-white rounded-lg shadow-lg z-10">
+              <button
+                className="block w-full text-left px-4 py-2 hover:bg-gray-700"
+                onClick={() => {
+                  navigate("/profile");
+                  setMenuOpen(false);
+                }}
+              >
+                Profile
+              </button>
+              <button
+                className="block w-full text-left px-4 py-2 hover:bg-gray-700 border-t border-gray-700"
+                onClick={handleLogout}
+              >
+                Logout
+              </button>
+            </div>
+          )}
+        </div>
+      ) : (
+        <button
+          className="bg-blue-600 hover:bg-blue-700 px-4 sm:px-6 py-1 sm:py-2 rounded text-sm sm:text-base"
+          onClick={() => navigate("/login")}
+        >
+          Login
+        </button>
+      )}
+    </header>
+  );
+
   // Render the Interview interface
   return (
-    <div className="bg-gradient-to-r from-black to-blue-900 text-white min-h-screen">
-      {isEnding && (
-        <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50">
-          <div className="text-center">
-            <div className="inline-block animate-spin rounded-full h-16 w-16 border-t-4 border-blue-500 border-solid mb-4"></div>
-            <p className="text-xl font-bold text-white">Ending Interview...</p>
-            <p className="text-gray-300 mt-2">Processing your results</p>
-          </div>
-        </div>
-      )}
-
-      <header className="flex justify-between items-center p-6 bg-gray-900 shadow-lg">
-        <div className="flex items-center">
-          <div className="mr-3 bg-blue-600 p-2 rounded-lg">
-            <FaLaptopCode className="text-white text-2xl" />
-          </div>
-          <h1 className="text-2xl font-bold">AI Interview</h1>
-        </div>
-
-        {user ? (
-          <div className="relative">
-            <div className="flex items-center space-x-4">
-              <div className="text-right">
-                <p className="text-lg font-semibold">
-                  {user.firstName} {user.lastName}
-                </p>
-                <p className="text-gray-400 text-sm">{user.email}</p>
-              </div>
-              <div
-                className="w-10 h-10 bg-gray-600 rounded-full flex items-center justify-center cursor-pointer"
-                onClick={() => setMenuOpen(!menuOpen)}
-              >
-                <FaUserTie className="text-white text-xl" />
-              </div>
-            </div>
-            {menuOpen && (
-              <div className="absolute right-0 mt-2 w-40 bg-gray-800 text-white rounded-lg shadow-lg">
-                <button
-                  className="block w-full text-left px-4 py-2 hover:bg-gray-700"
-                  onClick={() => navigate("/profile")}
-                >
-                  Profile
-                </button>
-                <button
-                  className="block w-full text-left px-4 py-2 hover:bg-gray-700 border-t border-gray-700"
-                  onClick={handleLogout}
-                >
-                  Logout
-                </button>
-              </div>
-            )}
-          </div>
-        ) : (
-          <button
-            className="bg-blue-600 hover:bg-blue-700 px-6 py-2 rounded"
-            onClick={() => navigate("/login")}
-          >
-            Login
-          </button>
-        )}
-      </header>
+    <div className="min-h-screen bg-gradient-to-r from-black to-blue-900 text-white">
+      <Header
+        user={user}
+        setMenuOpen={setMenuOpen}
+        menuOpen={menuOpen}
+        navigate={navigate}
+        handleLogout={handleLogout}
+      />
 
       {!isInterviewStarted ? (
         // Interview setup page
-        <div className="container mx-auto w-full px-4 mt-10">
-          <div className="bg-gray-800 rounded-lg shadow-lg p-6">
-            <h1 className="text-2xl font-bold mb-6 text-center text-white">
+        <div className="container mx-auto w-full px-4 mt-4 sm:mt-8 max-w-2xl">
+          <div className="bg-gray-800 rounded-lg shadow-lg p-4 sm:p-6">
+            <h1 className="text-xl sm:text-2xl font-bold mb-4 sm:mb-6 text-center text-white">
               AI Technical Interview
             </h1>
-            <form onSubmit={startInterview} className="space-y-4">
+            <form onSubmit={startInterview} className="space-y-3 sm:space-y-4">
               <div>
                 <label
                   htmlFor="name"
@@ -1402,19 +1406,19 @@ const Interview = () => {
                   Upload Your Resume (Optional)
                 </label>
                 <div className="flex items-center justify-center w-full">
-                  <label className="flex flex-col rounded-lg border-2 border-dashed border-gray-600 w-full h-32 p-10 group text-center cursor-pointer hover:bg-gray-700">
+                  <label className="flex flex-col rounded-lg border-2 border-dashed border-gray-600 w-full h-24 sm:h-32 p-4 sm:p-6 group text-center cursor-pointer hover:bg-gray-700">
                     <div className="h-full w-full text-center flex flex-col items-center justify-center">
-                      <div className="flex flex-auto max-h-48 w-full mx-auto">
+                      <div className="flex flex-auto w-full mx-auto overflow-hidden">
                         {resumeFile ? (
-                          <p className="text-gray-300">
+                          <p className="text-sm sm:text-base text-gray-300 truncate mx-auto">
                             {resumeFile.name} (
                             {Math.round(resumeFile.size / 1024)} KB)
                           </p>
                         ) : (
-                          <FaFileUpload className="mx-auto text-gray-400 text-3xl" />
+                          <FaFileUpload className="mx-auto text-gray-400 text-xl sm:text-3xl" />
                         )}
                       </div>
-                      <p className="pointer-none text-gray-400 text-sm">
+                      <p className="pointer-none text-gray-400 text-xs sm:text-sm mt-1 sm:mt-2">
                         <span className="text-blue-500 hover:underline">
                           Click to upload
                         </span>{" "}
@@ -1433,7 +1437,7 @@ const Interview = () => {
 
               <button
                 type="submit"
-                className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline transition duration-300"
+                className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded focus:outline-none focus:shadow-outline transition duration-300 text-sm sm:text-base"
                 disabled={isLoading}
               >
                 {isLoading ? (
@@ -1450,15 +1454,15 @@ const Interview = () => {
         </div>
       ) : (
         // Active interview UI
-        <div className="container mx-auto w-full px-4 mt-6">
+        <div className="container mx-auto w-full px-2 sm:px-4 mt-4 sm:mt-6">
           <div className="bg-gray-800 shadow-lg rounded-lg overflow-hidden">
-            <div className="bg-gray-900 text-white p-4 flex justify-between items-center">
-              <h2 className="text-xl font-bold">
+            <div className="bg-gray-900 text-white p-3 sm:p-4 flex flex-col sm:flex-row justify-between items-center gap-2 sm:gap-0">
+              <h2 className="text-lg sm:text-xl font-bold">
                 AI Technical Interview Session
               </h2>
               <button
                 onClick={handleEndInterview}
-                className="bg-red-600 hover:bg-red-700 text-white py-2 px-4 rounded-md flex items-center"
+                className="bg-red-600 hover:bg-red-700 text-white py-1 sm:py-2 px-3 sm:px-4 rounded-md flex items-center text-sm sm:text-base"
                 disabled={!isInterviewStarted || isLoading || isEnding}
               >
                 {isEnding ? "Ending..." : "End Interview"}
@@ -1466,16 +1470,16 @@ const Interview = () => {
             </div>
 
             {/* Interview chat history */}
-            <div className="p-4 h-[60vh] overflow-y-auto bg-gray-700">
+            <div className="p-3 sm:p-4 h-[50vh] sm:h-[60vh] overflow-y-auto bg-gray-700">
               {messages.map((msg, index) => (
                 <div
                   key={index}
-                  className={`mb-4 ${
+                  className={`mb-3 sm:mb-4 ${
                     msg.role === "user" ? "text-right" : "text-left"
                   }`}
                 >
                   <div
-                    className={`inline-block max-w-[70%] rounded-lg p-3 ${
+                    className={`inline-block max-w-[85%] sm:max-w-[70%] rounded-lg p-2 sm:p-3 text-sm sm:text-base ${
                       msg.role === "user"
                         ? "bg-blue-600 text-white"
                         : "bg-gray-800 text-white"
@@ -1489,18 +1493,20 @@ const Interview = () => {
             </div>
 
             {/* Speaking status indicator */}
-            <div className="px-4 py-2 bg-gray-800 border-t border-gray-700 text-center font-bold">
+            <div className="px-3 sm:px-4 py-1 sm:py-2 bg-gray-800 border-t border-gray-700 text-center font-bold">
               {isSpeaking ? (
-                <p className="text-red-500 text-lg">AI is speaking...</p>
+                <p className="text-red-500 text-base sm:text-lg">
+                  AI is speaking...
+                </p>
               ) : isInterviewStarted && !assessment ? (
-                <p className="text-green-500 text-lg">
+                <p className="text-green-500 text-base sm:text-lg">
                   It's your turn to speak
                 </p>
               ) : null}
             </div>
 
             {/* Input area */}
-            <div className="p-4 bg-gray-900 border-t border-gray-700">
+            <div className="p-3 sm:p-4 bg-gray-900 border-t border-gray-700">
               {!assessment ? (
                 <div className="flex items-center space-x-2">
                   <input
@@ -1512,7 +1518,7 @@ const Interview = () => {
                         sendResponse();
                       }
                     }}
-                    className="flex-1 px-4 py-2 bg-gray-700 text-white border border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="flex-1 px-3 sm:px-4 py-2 bg-gray-700 text-white border border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm sm:text-base"
                     placeholder="Type your response..."
                     disabled={isSpeaking || isLoading}
                   />
@@ -1522,7 +1528,7 @@ const Interview = () => {
                         sendResponse();
                       }
                     }}
-                    className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition"
+                    className="bg-blue-600 text-white px-3 sm:px-4 py-2 rounded-lg hover:bg-blue-700 transition text-sm sm:text-base"
                     disabled={isSpeaking || isLoading || !userInput.trim()}
                   >
                     Send
@@ -1536,15 +1542,15 @@ const Interview = () => {
                     }`}
                   >
                     {isListening ? (
-                      <FaPause className="text-white" />
+                      <FaPause className="text-white text-sm sm:text-base" />
                     ) : (
-                      <FaMicrophone className="text-white" />
+                      <FaMicrophone className="text-white text-sm sm:text-base" />
                     )}
                   </button>
                 </div>
               ) : (
-                <div className="text-center py-4">
-                  <span className="text-2xl font-bold text-blue-400">
+                <div className="text-center py-3 sm:py-4">
+                  <span className="text-xl sm:text-2xl font-bold text-blue-400">
                     Interview Completed!
                   </span>
                 </div>
@@ -1556,15 +1562,17 @@ const Interview = () => {
 
             {/* Assessment results */}
             {assessment && (
-              <div className="p-6 bg-gray-800 border-t border-gray-700">
-                <h3 className="text-xl font-bold mb-4 text-blue-400">
+              <div className="p-4 sm:p-6 bg-gray-800 border-t border-gray-700">
+                <h3 className="text-lg sm:text-xl font-bold mb-3 sm:mb-4 text-blue-400">
                   Interview Assessment
                 </h3>
-                <div className="space-y-4 text-white">{formatAssessment()}</div>
-                <div className="mt-6 text-center">
+                <div className="space-y-3 sm:space-y-4 text-sm sm:text-base text-white">
+                  {formatAssessment()}
+                </div>
+                <div className="mt-4 sm:mt-6 text-center">
                   <button
                     onClick={resetInterview}
-                    className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded font-bold transition"
+                    className="bg-blue-600 hover:bg-blue-700 text-white px-4 sm:px-6 py-2 rounded font-medium transition text-sm sm:text-base"
                   >
                     Return to Setup
                   </button>
